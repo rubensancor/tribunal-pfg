@@ -40,6 +40,6 @@ Preconditions:
 ## Gotchas
 
 - El aviso final junta el recuento de subidos y los errores de cada archivo. Al subir a la vez `Buena.pdf` y `falso.pdf`, el estado es `1 PDF cargado. falso.pdf: no es un PDF`.
-- Un archivo sin extensión `.pdf` no llega al servidor: el aviso es `Solo se pueden cargar archivos PDF.`.
+- Un archivo sin extensión `.pdf` no llega al servidor y añade `<nombre>: no es un PDF.` al aviso, también dentro de un lote mixto. El selector de archivos propone solo `.pdf` (`accept`), así que el camino habitual para un lote mixto es arrastrar y soltar (pasa un `File` por cada archivo en el mismo `DataTransfer`).
 - `set_files` admite una lista para subir varios a la vez; el aviso pasa a `2 PDF cargados.`.
 - Si estás en una vista de detalle, la subida te devuelve a `#/`.

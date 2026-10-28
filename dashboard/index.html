@@ -306,11 +306,10 @@ async function cargar() {
 }
 
 async function subir(files) {
-  const pdfs = [...files].filter(f => f.name.toLowerCase().endsWith(".pdf"));
-  if (!pdfs.length) return aviso("Solo se pueden cargar archivos PDF.");
   let subidos = 0;
   const errores = [];
-  for (const f of pdfs) {
+  for (const f of [...files]) {  // copia: onchange vacía el FileList tras el primer await
+    if (!f.name.toLowerCase().endsWith(".pdf")) { errores.push(`${f.name}: no es un PDF.`); continue; }
     if (f.size > MAX) { errores.push(`${f.name}: ocupa más de 100 MB.`); continue; }
     try {
       const r = await fetch(`/api/pfgs?nombre=${encodeURIComponent(f.name)}`, {method: "POST", body: f});
