@@ -30,7 +30,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = Path(os.environ.get("TMPDIR", "/tmp")) / "tribunal-pfg-verify"
-COPIA = ["dashboard/server.py", "dashboard/index.html", "scripts/pfg.py", "config/categorias.json"]
+COPIA = ["dashboard/server.py", "dashboard/index.html", "scripts/pfg.py", "config/categorias.json",
+         "AGENTS.md", "CLAUDE.md",  # los agentes que lanza el dashboard necesitan las reglas y las skills
+         *sorted(str(p.relative_to(REPO)) for p in (REPO / ".agents").rglob("*") if p.is_file())]
 FASES = ["troceado", "leyendo", "leido", "preguntas", "clasificadas"]
 
 
@@ -58,6 +60,9 @@ def arrancar():
         (app / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / f, app / f)
     (app / "pfgs").mkdir()
+    (app / ".claude").mkdir()
+    for enlace in ("skills", "agents"):
+        (app / ".claude" / enlace).symlink_to(f"../.agents/{enlace}")
     evid.mkdir(parents=True)
     # El servidor llama a webbrowser.open: lo capturamos en un log en vez de abrir una pestaña.
     abrir = rd / "abrir-navegador"

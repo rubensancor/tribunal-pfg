@@ -13,7 +13,7 @@ Todo pasa por un solo script, `.agents/skills/verify-tribunal/verificar.py` (un 
 
 - **Nunca conduzcas `http://127.0.0.1:8765`** ni ninguna instancia que no hayas arrancado tú: es la del docente y `pfgs/` contiene memorias reales con datos personales.
 - **Nunca leas, subas ni copies nada de `pfgs/` del repo.** Usa solo memorias sintéticas (`$V pdf`).
-- El servidor fija su carpeta de datos en `<raíz>/pfgs` y no admite otra. Por eso `arrancar` copia `dashboard/`, `scripts/pfg.py` y `config/categorias.json` a una carpeta desechable y arranca esa copia en un puerto libre. Pueden convivir varias ejecuciones; fija la tuya con `export VERIFY_RUN=<run>`.
+- El servidor fija su carpeta de datos en `<raíz>/pfgs` y no admite otra. Por eso `arrancar` copia `dashboard/`, `scripts/pfg.py`, `config/categorias.json`, `AGENTS.md`, `CLAUDE.md` y `.agents/` (con los enlaces de `.claude/`, que necesitan los agentes que lanza el dashboard) a una carpeta desechable y arranca esa copia en un puerto libre. Pueden convivir varias ejecuciones; fija la tuya con `export VERIFY_RUN=<run>`.
 - Si cambias código del repo después de arrancar, la copia queda desfasada: `doctor` lo detecta. Haz `limpiar` y `arrancar` otra vez.
 
 ## Arrancar

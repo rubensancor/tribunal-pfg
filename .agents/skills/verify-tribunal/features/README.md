@@ -33,6 +33,7 @@ Un H1, un párrafo con el comportamiento visible y cuatro H2 en este orden: `Sub
 - [Subir memorias](./subir-pfg.md): botón, arrastrar y soltar, nombres repetidos y rechazo de archivos que no son PDF.
 - [Estado y siguiente paso](./estados-pfg.md): estados de la tarjeta, KPI, progreso, comando del siguiente paso y botón Copiar.
 - [Detalle de un PFG](./detalle-pfg.md): ficha, secciones, preguntas con filtro por categoría, enlaces al PDF y PFG inexistente.
+- [Ejecutar fases y ajustes](./ejecutar-fases.md): harness y modelo por fase, lanzar, detener, resultado sin avance y protección de origen.
 - [CLI pfg.py](./cli-pfg.md): `trocear`, `validar` e `imagen` sobre la copia desechable.
 
-Fuera del mapa: las skills `leer-pfg` y `preguntas-pfg`. Las ejecuta un agente y no se conducen con este arnés. `fase` simula sus archivos de salida.
+Las skills `leer-pfg` y `preguntas-pfg` se ejecutan de verdad solo en [ejecutar-fases](./ejecutar-fases.md), que gasta tokens. Las demás recetas usan `fase`, que simula sus archivos de salida.
