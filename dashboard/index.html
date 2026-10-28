@@ -308,14 +308,17 @@ async function cargar() {
 async function subir(files) {
   const pdfs = [...files].filter(f => f.name.toLowerCase().endsWith(".pdf"));
   if (!pdfs.length) return aviso("Solo se pueden cargar archivos PDF.");
+  let subidos = 0;
+  const errores = [];
   for (const f of pdfs) {
-    if (f.size > MAX) { aviso(`${f.name}: ocupa más de 100 MB.`); continue; }
+    if (f.size > MAX) { errores.push(`${f.name}: ocupa más de 100 MB.`); continue; }
     try {
       const r = await fetch(`/api/pfgs?nombre=${encodeURIComponent(f.name)}`, {method: "POST", body: f});
-      if (!r.ok) aviso(`${f.name}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}`);
-    } catch { aviso(`${f.name}: no se pudo subir.`); }
+      if (r.ok) subidos++;
+      else errores.push(`${f.name}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}`);
+    } catch { errores.push(`${f.name}: no se pudo subir.`); }
   }
-  aviso(`${pdfs.length} PDF cargado${pdfs.length > 1 ? "s" : ""}.`);
+  aviso([subidos && `${subidos} PDF cargado${subidos > 1 ? "s" : ""}.`, ...errores].filter(Boolean).join(" "));
   if (location.hash.length > 2) location.hash = "#/"; else cargar();
 }
 

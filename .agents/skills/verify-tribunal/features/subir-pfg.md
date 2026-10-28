@@ -39,7 +39,7 @@ Preconditions:
 
 ## Gotchas
 
-- `subir()` en `index.html` muestra siempre `N PDF cargado(s).` al terminar, también cuando el servidor rechaza el archivo. El aviso de error dura milisegundos y la comprobación del estado de `subir-no-pdf` falla. Es un fallo real de la app; no relajes la comprobación.
+- El aviso final junta el recuento de subidos y los errores de cada archivo. Al subir a la vez `Buena.pdf` y `falso.pdf`, el estado es `1 PDF cargado. falso.pdf: no es un PDF`.
 - Un archivo sin extensión `.pdf` no llega al servidor: el aviso es `Solo se pueden cargar archivos PDF.`.
 - `set_files` admite una lista para subir varios a la vez; el aviso pasa a `2 PDF cargados.`.
 - Si estás en una vista de detalle, la subida te devuelve a `#/`.
