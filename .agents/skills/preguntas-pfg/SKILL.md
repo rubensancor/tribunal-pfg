@@ -18,7 +18,7 @@ El orden importa: **primero se escriben las preguntas y luego se clasifican**. A
 
 Lee `analisis.json` y los `secciones/NN.json`. Abre tramos de `secciones/NN.txt` cuando necesites la cita exacta o comprobar algo.
 
-Las buenas preguntas salen de las **tensiones** del trabajo: las que han marcado los lectores, las debilidades y la tabla de coherencia del análisis, y lo que veas con las lentes de `../leer-pfg/lentes.md`. Las lentes dicen dónde mirar, no qué cubrir: no hace falta una pregunta por lente.
+Las buenas preguntas salen de las **tensiones** del trabajo: las que han marcado los lectores, las debilidades y la tabla de coherencia del análisis, y lo que veas con las lentes de `.agents/skills/leer-pfg/lentes.md`. Las lentes dicen dónde mirar, no qué cubrir: no hace falta una pregunta por lente.
 
 **Cuántas**: las que el trabajo merezca, normalmente entre 8 y 15. No hay cupo por tema. Si el trabajo flojea sobre todo en un punto, que la mayoría de las preguntas vayan ahí.
 

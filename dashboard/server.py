@@ -27,7 +27,10 @@ FASES = {"leer-pfg": "Lectura de la memoria", "preguntas-pfg": "Preguntas para l
 COMANDOS_SKILLS = ["uv run scripts/pfg.py", "python3 -m json.tool"]  # lo único que ejecutan las skills
 MODELO = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9._:/@-]{0,99})?")  # sin «-» inicial: no puede colarse como flag
 PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder preguntas ni a confirmar nada. "
-          "Ejecuta los comandos desde el directorio actual, que es la raíz del proyecto.")
+          "Ejecuta los comandos desde el directorio actual, que es la raíz del proyecto. En la shell solo puedes ejecutar "
+          + " y ".join(f"`{c} …`" for c in COMANDOS_SKILLS) +
+          ": cualquier otro comando se deniega y corta la ejecución. Para leer, buscar o contar usa tus herramientas "
+          "de archivos, no la shell.")
 AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 

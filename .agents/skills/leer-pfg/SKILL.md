@@ -29,7 +29,7 @@ Sus instrucciones están en `.agents/agents/lector-seccion.md`. Usa la primera v
    - Claude Code: Agent/Task con `subagent_type: lector-seccion`.
    - Pi con pi-subagents: agente `lector-seccion`.
    - Codex: pide explícitamente lanzar el agente `lector-seccion` (definido en `.codex/agents/`).
-2. **CLI no interactivo desde la shell**: un proceso por sección, con `&` y `wait`. El prompt es: «Sigue .agents/agents/lector-seccion.md (ignora la cabecera YAML). Lee … y escribe …».
+2. **CLI no interactivo desde la shell**, solo en una sesión interactiva. En modo no interactivo (lanzado desde el dashboard) solo se permiten `uv run scripts/pfg.py` y `python3 -m json.tool`: no busques ni lances otros CLI y pasa a la vía 3. Un proceso por sección, con `&` y `wait`. El prompt es: «Sigue .agents/agents/lector-seccion.md (ignora la cabecera YAML). Lee … y escribe …».
    - `claude -p --model sonnet --permission-mode acceptEdits --allowedTools "Bash(python3 -m json.tool:*)" "<prompt>"`
    - `pi -p --model sonnet --no-session "<prompt>"`
    - `codex exec -m gpt-6-luna -s workspace-write "<prompt>"`
@@ -52,7 +52,7 @@ Si hay errores, relanza los lectores de esas secciones (2 reintentos como máxim
   - Si las marcas no traen `pág:`, calcula el desfase comprobándolo en dos puntos distintos, donde el número impreso se lea en el texto.
   - Rellena `pag` = pdf − desfase y anota el desfase en `desfase_paginas`.
   - En portada, índices o anexos sin número impreso, `pag` vale `null`.
-- Aplica las lentes de `lentes.md` que encajen con el tipo de proyecto.
+- Aplica las lentes de `.agents/skills/leer-pfg/lentes.md` que encajen con el tipo de proyecto.
 
 Escribe `pfgs/<id>/analisis.json`. Todas las claves son obligatorias: si un dato no aparece, usa `""` o `null`. En `coherencia`, el par `pdf`/`pag` señala dónde se plantea el objetivo, y `evaluacion` dónde se evalúa (`null` si no se evalúa).
 
