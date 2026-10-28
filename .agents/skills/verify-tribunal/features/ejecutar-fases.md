@@ -40,5 +40,6 @@ Preconditions:
 - El estado de las ejecuciones vive en la memoria del servidor: al reiniciarlo desaparece el bloque de ejecución, pero los archivos y los registros de `pfgs/<id>/ejecuciones/` siguen ahí.
 - `claude -p` y `pi -p` solo escriben en el registro al terminar. Mientras tanto, el avance se ve en el contador de secciones.
 - agy sale con 0 cuando se le deniega un comando. Por eso el resultado se deduce de si el PFG avanzó de fase, no del código de salida.
+- El servidor lee `index.html` del disco en cada petición, pero su propio código solo al arrancar. Un dashboard arrancado antes de actualizar enseña el enlace Ajustes y responde 404 a `/api/config`. La página muestra entonces `El dashboard no ha podido cargar esta página` y sugiere reiniciar. Para reproducirlo, usa `page.route("**/api/config", lambda r: r.fulfill(status=404, content_type="application/json", body='{"error": "no encontrado"}'))`.
 - No pruebes agy con `--dangerously-skip-permissions`: el dashboard no lo usa nunca.
 - `$V pdf` solo tiene texto de relleno. `leer-pfg` termina con una ficha casi vacía, pero `preguntas-pfg` se niega con razón a inventar preguntas, así que con estos datos la fase de preguntas no llega a `Listo`. Para recorrerla entera hace falta una memoria sintética con contenido real, que la semilla aún no tiene.

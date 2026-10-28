@@ -340,7 +340,9 @@ async function cargar() {
   if (location.hash + txt === pintado) return;
   pintado = location.hash + txt;
   const abiertos = [...document.querySelectorAll("details[open][id]")].map(d => d.id);
-  $("#main").innerHTML = !r.ok ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
+  $("#main").innerHTML = r.status === 404 && id ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
+    : !r.ok ? vacio("El dashboard no ha podido cargar esta página", `<p>${h(JSON.parse(txt || "{}").error || "error " + r.status)}.
+        Si acabas de actualizar el dashboard, reinicia el servidor (Ctrl+C y <code>uv run dashboard/server.py</code>).</p><p><a href="#/">Volver</a></p>`)
     : ajustes ? vistaAjustes(JSON.parse(txt)) : id ? detalle(JSON.parse(txt), pestana, cat) : rejilla(JSON.parse(txt));
   abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
 }
