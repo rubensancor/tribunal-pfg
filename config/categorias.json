@@ -1,0 +1,12 @@
+[
+  {"id": "contexto-objetivos", "nombre": "Contexto y objetivos", "descripcion": "Motivación, objetivos, alcance y requisitos del trabajo."},
+  {"id": "estado-arte", "nombre": "Fundamentos y estado del arte", "descripcion": "Conceptos teóricos, trabajos previos y alternativas existentes."},
+  {"id": "decisiones-diseno", "nombre": "Decisiones de diseño", "descripcion": "Por qué se eligió una tecnología, arquitectura, algoritmo, componente o parámetro frente a otras opciones."},
+  {"id": "implementacion", "nombre": "Implementación", "descripcion": "Cómo está construido: código, circuitos, cálculos, montaje, integración."},
+  {"id": "validacion", "nombre": "Validación y pruebas", "descripcion": "Cómo se comprobó que funciona: método, casos de prueba, línea base, métricas."},
+  {"id": "resultados", "nombre": "Resultados", "descripcion": "Interpretación de cifras y conclusiones, y si la evidencia las respalda."},
+  {"id": "limitaciones", "nombre": "Limitaciones y escalabilidad", "descripcion": "Qué pasa fuera del caso favorable: escala, fallos, datos reales, producción."},
+  {"id": "gestion", "nombre": "Gestión del proyecto", "descripcion": "Planificación, presupuesto, riesgos y desviaciones."},
+  {"id": "impacto", "nombre": "Impacto", "descripcion": "Sostenibilidad, ética, normativa, privacidad y coste real."},
+  {"id": "dominio", "nombre": "Dominio y autoría", "descripcion": "Que el estudiante explique con sus palabras una parte concreta (código, fórmula, figura, decisión)."}
+]

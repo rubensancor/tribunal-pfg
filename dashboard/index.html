@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tribunal PFG</title>
+<style>
+:root {
+  --bg: #f5f4f0; --panel: #fff; --ink: #1c1c1e; --muted: #6a6a70; --line: #e3e1da;
+  --accent: #1f4fd1; --accent-soft: #e9eefc; --warn: #9a5800; --warn-soft: #fcf0dc;
+  --ok: #1b7543; --ok-soft: #e2f3e9; --bad: #b42318; --bad-soft: #fcebe9; --violet: #6a3fc1; --violet-soft: #f0eafb;
+  --radius: 10px; --shadow: 0 1px 2px rgb(0 0 0 / .05); color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131315; --panel: #1c1c1f; --ink: #ececef; --muted: #9b9ba3; --line: #2c2c32;
+    --accent: #84a6ff; --accent-soft: #1d2744; --warn: #f0b25a; --warn-soft: #362816;
+    --ok: #6fd39a; --ok-soft: #15301f; --bad: #ff8a80; --bad-soft: #3a1b19; --violet: #b99bff; --violet-soft: #2a2140;
+    --shadow: none; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
+.marca { font-weight: 650; font-size: 17px; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
+.marca span { color: var(--muted); font-weight: 450; }
+.top .btn { margin-left: auto; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  border-radius: 8px; padding: 7px 13px; font: inherit; font-weight: 550; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { .btn.primary { color: #0d1430; } }
+
+main.wrap { padding-top: 28px; padding-bottom: 60px; }
+h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.015em; }
+.resumen-top { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 16px; min-width: 120px; box-shadow: var(--shadow); }
+.kpi b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.kpi span { color: var(--muted); font-size: 13px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.card { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow); }
+.card:hover { border-color: var(--muted); }
+.card h2 { font-size: 16px; line-height: 1.35; margin: 0; }
+.card h2 a { color: var(--ink); text-decoration: none; }
+.card h2 a::after { content: ""; position: absolute; inset: 0; }
+.card .meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.card .pie { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-top: auto; }
+.card .cmd { position: relative; z-index: 1; }
+
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 99px; background: var(--line); color: var(--muted); }
+.badge.leyendo { background: var(--warn-soft); color: var(--warn); }
+.badge.leido { background: var(--accent-soft); color: var(--accent); }
+.badge.preguntas { background: var(--violet-soft); color: var(--violet); }
+.badge.clasificadas { background: var(--ok-soft); color: var(--ok); }
+
+.prog { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.prog div { height: 100%; background: var(--warn); transition: width .4s; }
+
+.cmd { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 6px 6px 10px; }
+.cmd code { flex: 1; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.cmd button { font-size: 12.5px; padding: 4px 10px; }
+.next { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--accent-soft); border-radius: var(--radius); padding: 10px 14px; margin: 16px 0 4px; font-size: 14px; }
+.next .cmd { flex: 1; min-width: 260px; background: var(--panel); }
+
+.vacio { text-align: center; padding: 70px 20px; border: 2px dashed var(--line); border-radius: 14px; color: var(--muted); }
+.vacio b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
+.error { background: var(--bad-soft); color: var(--bad); padding: 10px 14px; border-radius: 8px; }
+
+.det-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.crumbs a { text-decoration: none; font-size: 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 20px 0; overflow-x: auto; }
+.tabs a { padding: 10px 14px; text-decoration: none; color: var(--muted); font-weight: 550; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs a[aria-current="page"] { color: var(--ink); border-color: var(--accent); }
+
+.ficha { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.bloque { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow); }
+.bloque.ancho { grid-column: 1 / -1; }
+.bloque h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+.bloque.bien h3 { color: var(--ok); }
+.bloque.flojo h3 { color: var(--warn); }
+.bloque p { margin: 0; }
+ul.items { margin: 0; padding-left: 18px; }
+ul.items li { margin: 4px 0; }
+.pag { display: inline-block; font-size: 12px; font-weight: 600; text-decoration: none; background: var(--accent-soft); padding: 0 7px; border-radius: 99px; white-space: nowrap; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+.eval { font-weight: 600; }
+.eval.no { color: var(--bad); } .eval.parcial { color: var(--warn); } .eval.sí { color: var(--ok); }
+
+details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; box-shadow: var(--shadow); }
+details.sec > summary { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; cursor: pointer; list-style: none; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary::before { content: "▸"; color: var(--muted); }
+details.sec[open] > summary::before { content: "▾"; }
+details.sec.sin-leer > summary { cursor: default; }
+details.sec.sin-leer .t { color: var(--muted); font-weight: 500; }
+details.sec.sin-leer > summary::before { content: "·"; }
+.sec .n { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.sec .t { font-weight: 600; flex: 1; }
+.sec .cuerpo { padding: 0 16px 16px 42px; }
+.sec h4 { font-size: 13px; color: var(--muted); margin: 14px 0 4px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 6px; background: var(--line); color: var(--ink); }
+.tag.aviso { background: var(--warn-soft); color: var(--warn); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.chips a { text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: 13.5px; }
+.chips a b { color: var(--muted); font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.chips a.cero { color: var(--muted); }
+.chips a[aria-current="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.chips a[aria-current="true"] b { color: inherit; }
+ol.preguntas { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+.q-head { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.q-n { font-weight: 700; color: var(--accent); }
+.q-text { font-size: 16.5px; line-height: 1.45; margin: 8px 0; font-weight: 520; }
+.anclaje { font-size: 13.5px; color: var(--muted); margin: 0 0 6px; }
+.q details summary { cursor: pointer; font-size: 13.5px; color: var(--accent); font-weight: 550; }
+.q dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; margin: 10px 0 0; font-size: 14px; }
+.q dt { color: var(--muted); font-weight: 600; }
+.q dd { margin: 0; }
+
+#suelta { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; background: color-mix(in srgb, var(--accent) 14%, var(--bg)); border: 3px dashed var(--accent); font-size: 20px; font-weight: 650; color: var(--accent); }
+body.arrastrando #suelta { display: grid; }
+#aviso { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#aviso.visible { opacity: 1; }
+
+@media (max-width: 720px) {
+  .ficha { grid-template-columns: 1fr; }
+  .det-head { flex-direction: column; }
+  .q dl { grid-template-columns: 1fr; }
+  .sec .cuerpo { padding-left: 16px; }
+}
+@media print {
+  body { background: #fff; color: #000; font-size: 12pt; }
+  .top, .tabs, .chips, .next, .crumbs, .det-head .btn, .resumen-top { display: none !important; }
+  .q, .bloque, details.sec { box-shadow: none; break-inside: avoid; border-color: #ccc; }
+  .q details summary { display: none; }
+  .pag { background: none; padding: 0; color: #000; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="marca" href="#/">Tribunal PFG <span>· preparación de defensas</span></a>
+    <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
+    <input type="file" id="archivo" accept="application/pdf,.pdf" multiple hidden>
+  </div>
+</header>
+<main class="wrap" id="main" aria-live="polite"></main>
+<div id="suelta">Suelta los PDF para cargarlos</div>
+<div id="aviso" role="status"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const lista = x => Array.isArray(x) ? x : [];
+const MAX = 100 * 1024 * 1024;
+const ESTADOS = {pendiente: "Pendiente de leer", leyendo: "Leyendo", leido: "Leído", preguntas: "Sin clasificar", clasificadas: "Listo"};
+const TENSIONES = {sin_justificar: "Sin justificar", sin_evidencia: "Sin evidencia", incoherencia: "Incoherencia",
+  validacion_debil: "Validación débil", limite_no_explorado: "Límite no explorado", cambio_de_nivel: "Cambio de nivel"};
+let pintado = "";  // última respuesta pintada: solo se repinta si algo cambia
+
+// ---------- piezas ----------
+const pag = (id, o) => Number.isInteger(o?.pdf)
+  ? `<a class="pag" href="/pfgs/${id}/memoria.pdf#page=${o.pdf}" target="_blank" rel="noopener">${o.pag ? "pág. " + h(o.pag) : "PDF " + o.pdf}</a>` : "";
+const items = (id, xs, extra = () => "") => lista(xs).length
+  ? `<ul class="items">${lista(xs).map(x => `<li>${extra(x)}${h(x?.texto ?? x)} ${pag(id, x)}</li>`).join("")}</ul>`
+  : `<p class="muted">—</p>`;
+const comando = c => `<div class="cmd"><code>${h(c)}</code><button class="btn" type="button" data-copiar="${h(c)}">Copiar</button></div>`;
+const vacio = (titulo, texto = "") => `<div class="vacio"><b>${titulo}</b>${texto}</div>`;
+const error = e => `<p class="error">${h(e)}</p>`;
+const fecha = t => new Date(t * 1000).toLocaleString("es-ES", {dateStyle: "short", timeStyle: "short"});
+const progreso = p => p.leidas < p.secciones
+  ? `<div class="prog" role="progressbar" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}"><div style="width:${100 * p.leidas / p.secciones}%"></div></div>
+     <span class="muted">${p.leidas}/${p.secciones} secciones leídas</span>`
+  : `<span class="muted">Secciones leídas · sintetizando…</span>`;
+
+// ---------- vistas ----------
+function rejilla(pfgs) {
+  if (!pfgs.length) return vacio("Aún no hay ningún PFG", "Arrastra aquí las memorias en PDF o pulsa «Cargar PFG».");
+  const n = e => pfgs.filter(p => e.includes(p.estado)).length;
+  return `<div class="resumen-top">
+      <div class="kpi"><b>${pfgs.length}</b><span>PFG cargados</span></div>
+      <div class="kpi"><b>${n(["pendiente", "leyendo"])}</b><span>por leer</span></div>
+      <div class="kpi"><b>${n(["leido", "preguntas"])}</b><span>en preparación</span></div>
+      <div class="kpi"><b>${n(["clasificadas"])}</b><span>listos para la defensa</span></div>
+    </div>
+    <div class="grid">${pfgs.map(p => `
+      <article class="card">
+        <div class="meta"><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span><span class="muted">${fecha(p.modificado)}</span></div>
+        <h2><a href="#/${p.id}">${h(p.titulo)}</a></h2>
+        <span class="muted">${h(p.estudiante) || "&nbsp;"}</span>
+        ${p.estado === "leyendo" ? progreso(p) : ""}
+        <div class="pie"><span>${p.secciones} secciones</span><span>${p.preguntas} preguntas</span></div>
+        ${p.comando ? comando(p.comando) : ""}
+      </article>`).join("")}</div>`;
+}
+
+function detalle(p, pestana, cat) {
+  const a = p.analisis && !p.analisis._error ? p.analisis : null;
+  const sub = a ? [a.estudiante, a.titulacion, a.director && "Dir.: " + a.director, a.paginas && a.paginas + " págs."].filter(Boolean).map(h).join(" · ") : "";
+  const tabs = [["ficha", "Ficha de lectura"], ["secciones", `Secciones · ${p.leidas}/${p.secciones}`], ["preguntas", `Preguntas · ${lista(p.preguntas).length}`]];
+  const vistas = {ficha: vistaFicha, secciones: vistaSecciones, preguntas: vistaPreguntas};
+  return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav>
+    <div class="det-head">
+      <div><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span><h1>${h(p.titulo)}</h1><p class="muted">${sub}</p></div>
+      <a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener">Abrir PDF</a>
+    </div>
+    ${p.estado === "leyendo" ? progreso(p) : ""}
+    ${p.comando ? `<div class="next"><span>Siguiente paso: pégalo en tu agente</span>${comando(p.comando)}</div>` : ""}
+    <nav class="tabs">${tabs.map(([k, t]) => `<a href="#/${p.id}/${k}" ${k === pestana ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
+    <section>${(vistas[pestana] || vistaFicha)(p, cat)}</section>`;
+}
+
+function vistaFicha(p) {
+  const a = p.analisis;
+  if (!a) return vacio("Todavía no hay ficha de lectura", "Se genera con la skill leer-pfg.");
+  if (a._error) return error(a._error);
+  const coh = lista(a.coherencia).length ? `<table><thead><tr><th>Objetivo</th><th>¿Evaluado?</th><th>Comentario</th></tr></thead><tbody>${
+    lista(a.coherencia).map(c => `<tr><td>${h(c.objetivo)} ${pag(p.id, c)}</td><td><span class="eval ${h(c.evaluado)}">${h(c.evaluado)}</span> ${pag(p.id, c.evaluacion)}</td><td>${h(c.comentario)}</td></tr>`).join("")
+  }</tbody></table>` : `<p class="muted">—</p>`;
+  return `<div class="ficha">
+    <div class="bloque ancho"><h3>Qué hace</h3><p>${h(a.que_hace)}</p></div>
+    <div class="bloque ancho"><h3>Aportación propia</h3><p>${h(a.aportacion_propia)}</p></div>
+    <div class="bloque"><h3>Decisiones clave</h3>${items(p.id, a.decisiones)}</div>
+    <div class="bloque"><h3>Resultados principales</h3>${items(p.id, a.resultados)}</div>
+    <div class="bloque bien"><h3>Puntos fuertes</h3>${items(p.id, a.fortalezas)}</div>
+    <div class="bloque flojo"><h3>Puntos débiles y dudas</h3>${items(p.id, a.debilidades)}</div>
+    <div class="bloque ancho"><h3>Si no hay tiempo, lee al menos</h3><p>${h(a.leer_al_menos)}</p></div>
+    <div class="bloque ancho"><h3>Coherencia objetivos ↔ resultados</h3>${coh}</div>
+    <div class="bloque ancho"><h3>Notas para el tribunal</h3>${items(p.id, a.notas_tribunal)}</div>
+    ${a.desfase_paginas ? `<p class="muted bloque ancho">Las páginas citadas son la numeración impresa (pág. PDF = pág. impresa + ${h(a.desfase_paginas)}).</p>` : ""}
+  </div>`;
+}
+
+function vistaSecciones(p) {
+  if (!p.indice.length) return vacio("La memoria aún no está troceada", "Se trocea al ejecutar la skill leer-pfg.");
+  return p.indice.map((s, i) => {
+    const l = p.lecturas[i];
+    const cab = `<span class="n">${String(s.n).padStart(2, "0")}</span><span class="t">${h(s.titulo)}</span><span class="muted">PDF ${s.pdf_ini}–${s.pdf_fin}</span>`;
+    if (!l) return `<details class="sec sin-leer"><summary>${cab}<span class="muted">sin leer</span></summary></details>`;
+    if (l._error) return `<details class="sec" id="s${i}"><summary>${cab}</summary><div class="cuerpo">${error(l._error)}</div></details>`;
+    const nt = lista(l.tensiones).length;
+    const bloque = (t, html) => html.includes("<li>") ? `<h4>${t}</h4>${html}` : "";
+    return `<details class="sec" id="s${i}"><summary>${cab}${nt ? `<span class="tag aviso">${nt} ${nt > 1 ? "tensiones" : "tensión"}</span>` : ""}</summary>
+      <div class="cuerpo">
+        <p>${h(l.resumen)}</p>
+        ${bloque("Tensiones", items(p.id, l.tensiones, t => `<span class="tag aviso">${h(TENSIONES[t.tipo] || t.tipo)}</span> `))}
+        ${bloque("Puntos clave", items(p.id, l.puntos_clave))}
+        ${bloque("Decisiones", items(p.id, l.decisiones, d => d.justificada ? "" : `<span class="tag">sin justificar</span> `))}
+        ${bloque("Resultados", items(p.id, l.resultados))}
+        ${bloque("No legible en el texto", items(p.id, lista(l.no_legible).map(x => ({...x, texto: x.motivo}))))}
+      </div></details>`;
+  }).join("");
+}
+
+function vistaPreguntas(p, cat) {
+  if (p.preguntas?._error) return error(p.preguntas._error);
+  const qs = lista(p.preguntas).slice().sort((a, b) => a.prioridad - b.prioridad);
+  if (!qs.length) return vacio("Todavía no hay preguntas", "Se generan con la skill preguntas-pfg.");
+  const cls = p.clasificacion && !p.clasificacion._error ? p.clasificacion : null;
+  const cats = [...lista(p.categorias), {id: "otra", nombre: "Otra", descripcion: "No encaja en ninguna categoría"}];
+  const nombre = Object.fromEntries(cats.map(c => [c.id, c.nombre]));
+  const cuenta = id => qs.filter(q => cls?.[q.id]?.categoria === id).length;
+  const chips = cls ? `<nav class="chips" aria-label="Filtrar por categoría">
+      <a href="#/${p.id}/preguntas" aria-current="${!cat}">Todas<b>${qs.length}</b></a>
+      ${cats.filter(c => c.id !== "otra" || cuenta("otra")).map(c => `<a href="#/${p.id}/preguntas/${c.id}" aria-current="${cat === c.id}"
+        class="${cuenta(c.id) ? "" : "cero"}" title="${h(c.descripcion)}">${h(c.nombre)}<b>${cuenta(c.id)}</b></a>`).join("")}
+    </nav>` : (p.clasificacion?._error ? error(p.clasificacion._error) : `<p class="muted">Preguntas aún sin clasificar.</p>`);
+  const visibles = qs.filter(q => !cat || cls?.[q.id]?.categoria === cat);
+  return chips + `<ol class="preguntas">${visibles.map(q => {
+    const c = cls?.[q.id];
+    return `<li class="q">
+      <div class="q-head"><span class="q-n">${h(q.id)}</span>${c ? `<span class="tag" title="${h(c.motivo)}">${h(nombre[c.categoria] ?? c.categoria)}</span>` : ""}<span class="muted">prioridad ${h(q.prioridad)}</span></div>
+      <p class="q-text">${h(q.pregunta)}</p>
+      <p class="anclaje">${pag(p.id, q.anclaje)} ${h(q.anclaje?.seccion)}${q.anclaje?.cita ? ` — «${h(q.anclaje.cita)}»` : ""}</p>
+      <details id="q-${h(q.id)}"><summary>Cómo valorar la respuesta</summary>
+        <dl><dt>Por qué importa</dt><dd>${h(q.por_que_importa)}</dd><dt>Buena respuesta</dt><dd>${h(q.buena_respuesta)}</dd>
+        <dt>Señal de alarma</dt><dd>${h(q.senal_alarma)}</dd><dt>Repregunta</dt><dd>${h(q.repregunta)}</dd></dl>
+      </details></li>`;
+  }).join("")}</ol>`;
+}
+
+// ---------- carga y refresco ----------
+async function cargar() {
+  const [, id, pestana = "ficha", cat] = location.hash.match(/^#\/([a-z0-9-]+)(?:\/(\w+))?(?:\/([a-z0-9-]+))?/) || [];
+  let r, txt;
+  try { r = await fetch(id ? `/api/pfgs/${id}` : "/api/pfgs"); txt = await r.text(); }
+  catch { return aviso("No se puede conectar con el servidor del dashboard."); }
+  if (location.hash + txt === pintado) return;
+  pintado = location.hash + txt;
+  const abiertos = [...document.querySelectorAll("details[open][id]")].map(d => d.id);
+  $("#main").innerHTML = !r.ok ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
+    : id ? detalle(JSON.parse(txt), pestana, cat) : rejilla(JSON.parse(txt));
+  abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
+}
+
+async function subir(files) {
+  const pdfs = [...files].filter(f => f.name.toLowerCase().endsWith(".pdf"));
+  if (!pdfs.length) return aviso("Solo se pueden cargar archivos PDF.");
+  for (const f of pdfs) {
+    if (f.size > MAX) { aviso(`${f.name}: ocupa más de 100 MB.`); continue; }
+    try {
+      const r = await fetch(`/api/pfgs?nombre=${encodeURIComponent(f.name)}`, {method: "POST", body: f});
+      if (!r.ok) aviso(`${f.name}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}`);
+    } catch { aviso(`${f.name}: no se pudo subir.`); }
+  }
+  aviso(`${pdfs.length} PDF cargado${pdfs.length > 1 ? "s" : ""}.`);
+  if (location.hash.length > 2) location.hash = "#/"; else cargar();
+}
+
+let avisoT;
+function aviso(msg) {
+  const el = $("#aviso");
+  el.textContent = msg; el.classList.add("visible");
+  clearTimeout(avisoT); avisoT = setTimeout(() => el.classList.remove("visible"), 3500);
+}
+
+$("#cargar").onclick = () => $("#archivo").click();
+$("#archivo").onchange = e => { subir(e.target.files); e.target.value = ""; };
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-copiar]");
+  if (!b) return;
+  navigator.clipboard.writeText(b.dataset.copiar).then(() => {
+    b.textContent = "Copiado"; setTimeout(() => b.textContent = "Copiar", 1500);
+  });
+});
+let arrastres = 0;
+addEventListener("dragenter", e => { e.preventDefault(); arrastres++; document.body.classList.add("arrastrando"); });
+addEventListener("dragleave", () => { if (--arrastres <= 0) { arrastres = 0; document.body.classList.remove("arrastrando"); } });
+addEventListener("dragover", e => e.preventDefault());
+addEventListener("drop", e => { e.preventDefault(); arrastres = 0; document.body.classList.remove("arrastrando"); subir(e.dataTransfer.files); });
+addEventListener("beforeprint", () => document.querySelectorAll("details").forEach(d => d.open = true));
+addEventListener("hashchange", () => { pintado = ""; cargar(); scrollTo(0, 0); });
+setInterval(() => document.hidden || cargar(), 4000);
+cargar();
+</script>
+</body>
+</html>

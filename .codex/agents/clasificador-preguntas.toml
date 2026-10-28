@@ -1,0 +1,8 @@
+name = "clasificador-preguntas"
+description = "Asigna una categoría a cada pregunta ya generada de un PFG (pfgs/<id>/preguntas.json) según config/categorias.json y escribe clasificacion.json. Lo lanza la skill preguntas-pfg."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = """
+Sigue al pie de la letra .agents/agents/clasificador-preguntas.md (ignora su cabecera YAML entre las líneas ---).
+Ese archivo es la fuente única de instrucciones para todos los harnesses.
+"""
