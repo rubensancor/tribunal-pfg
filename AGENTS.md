@@ -18,7 +18,7 @@ Abre http://127.0.0.1:8765. Si el puerto ya está ocupado, probablemente el dash
 2. Skill `leer-pfg`: escribe los resúmenes por sección y `analisis.json`.
 3. Skill `preguntas-pfg`: escribe `preguntas.json` y después `clasificacion.json`.
 
-El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. Los JSON de `pfgs/` son el contrato con el dashboard: después de escribirlos, ejecuta `uv run scripts/pfg.py validar <id>`.
+El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También puede lanzar las skills en modo no interactivo con el harness y el modelo que fije `config/ejecucion.json` (pantalla Ajustes). En ese caso nadie leerá tus preguntas: no pidas confirmación. Los JSON de `pfgs/` son el contrato con el dashboard: después de escribirlos, ejecuta `uv run scripts/pfg.py validar <id>`.
 
 ## Reglas
 
@@ -31,5 +31,5 @@ El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. Los JSON d
 
 ## Desarrollo
 
-- Test: `uv run tests/test_pfg.py`
+- Test: `uv run tests/test_pfg.py` y `uv run tests/test_dashboard.py`
 - Las instrucciones de los subagentes están en `.agents/agents/*.md`, que es la fuente única. `.claude/agents` es un enlace a esa carpeta, y `.codex/agents/*.toml` solo apunta a esos archivos y fija el modelo de Codex.

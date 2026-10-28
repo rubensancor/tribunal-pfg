@@ -2,3 +2,4 @@ pfgs/*
 !pfgs/.gitkeep
 __pycache__/
 .DS_Store
+config/ejecucion.json

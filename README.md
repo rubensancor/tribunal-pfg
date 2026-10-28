@@ -28,6 +28,18 @@ uv run dashboard/server.py        # abre http://127.0.0.1:8765
 
 Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemini Pro.
 
+## Ejecutar desde el dashboard
+
+En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el harness y el modelo de cada fase; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
+
+| Harness | Se lanza con | Permisos |
+|---|---|---|
+| Claude Code | `claude -p … --permission-mode dontAsk` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`; el resto se deniega |
+| Antigravity | `agy -p … --mode accept-edits` | los de tu `settings.json` de agy: añade `"command(uv run scripts/pfg.py)"` y `"command(python3 -m json.tool)"` a `permissions.allow`, o terminará sin hacer nada |
+| Pi | `pi -p … --no-session --approve` | ninguno: puede ejecutar cualquier comando |
+
+Las memorias son texto ajeno que el agente lee: con Pi, una instrucción escondida en un PDF podría ejecutar comandos. Para memorias que no conoces, prefiere Claude Code.
+
 ## Modelos baratos por harness
 
 | Harness | Dónde se fija |
@@ -53,4 +65,5 @@ Las memorias se quedan en `pfgs/`, que no se sube a git. El dashboard solo escuc
 
 ```bash
 uv run tests/test_pfg.py
+uv run tests/test_dashboard.py
 ```

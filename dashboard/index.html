@@ -30,7 +30,7 @@ a { color: var(--accent); }
 .top .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
 .marca { font-weight: 650; font-size: 17px; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
 .marca span { color: var(--muted); font-weight: 450; }
-.top .btn { margin-left: auto; }
+.top .acciones { margin-left: auto; display: flex; gap: 8px; }
 
 .btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   border-radius: 8px; padding: 7px 13px; font: inherit; font-weight: 550; cursor: pointer; text-decoration: none; white-space: nowrap; }
@@ -67,6 +67,13 @@ h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.01
 .cmd { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 6px 6px 10px; }
 .cmd code { flex: 1; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .cmd button { font-size: 12.5px; padding: 4px 10px; }
+.accion { position: relative; z-index: 1; display: grid; gap: 6px; }
+.ejec { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.ejec.fallida, .ejec.detenida, .ejec.sin_avance { color: var(--bad); }
+.ejec button { font-size: 12.5px; padding: 4px 10px; margin-left: auto; }
+pre.log { margin: 8px 0 0; max-height: 320px; overflow: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+form.ajustes select, form.ajustes input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 100%; }
+form.ajustes .btn { margin-top: 12px; }
 .next { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--accent-soft); border-radius: var(--radius); padding: 10px 14px; margin: 16px 0 4px; font-size: 14px; }
 .next .cmd { flex: 1; min-width: 260px; background: var(--panel); }
 
@@ -152,7 +159,10 @@ body.arrastrando #suelta { display: grid; }
 <header class="top">
   <div class="wrap">
     <a class="marca" href="#/">Tribunal PFG <span>· preparación de defensas</span></a>
-    <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
+    <div class="acciones">
+      <a class="btn" href="#ajustes">Ajustes</a>
+      <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
+    </div>
     <input type="file" id="archivo" accept="application/pdf,.pdf" multiple hidden>
   </div>
 </header>
@@ -177,6 +187,16 @@ const items = (id, xs, extra = () => "") => lista(xs).length
   ? `<ul class="items">${lista(xs).map(x => `<li>${extra(x)}${h(x?.texto ?? x)} ${pag(id, x)}</li>`).join("")}</ul>`
   : `<p class="muted">—</p>`;
 const comando = c => `<div class="cmd"><code>${h(c)}</code><button class="btn" type="button" data-copiar="${h(c)}">Copiar</button></div>`;
+const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Falló", detenida: "Detenida",
+  sin_avance: "Terminó sin completar la fase"};
+const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo ? ` (${h(e.modelo)})` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
+  + `${e.estado === "en_curso" ? `<button class="btn" type="button" data-detener>Detener</button>` : ""}</div>`;
+const siguiente = p => {
+  const e = p.ejecucion, enCurso = e?.estado === "en_curso";
+  if (!enCurso && !p.comando) return "";
+  return `<div class="accion" data-pfg="${p.id}">${e && e.estado !== "terminada" ? ejecucion(e) : ""}
+    ${!enCurso ? `${comando(p.comando)}<button class="btn primary" type="button" data-ejecutar>Ejecutar con ${h(p.ejecutor)}</button>` : ""}</div>`;
+};
 const vacio = (titulo, texto = "") => `<div class="vacio"><b>${titulo}</b>${texto}</div>`;
 const error = e => `<p class="error">${h(e)}</p>`;
 const fecha = t => new Date(t * 1000).toLocaleString("es-ES", {dateStyle: "short", timeStyle: "short"});
@@ -202,7 +222,7 @@ function rejilla(pfgs) {
         <span class="muted">${h(p.estudiante) || "&nbsp;"}</span>
         ${p.estado === "leyendo" ? progreso(p) : ""}
         <div class="pie"><span>${p.secciones} secciones</span><span>${p.preguntas} preguntas</span></div>
-        ${p.comando ? comando(p.comando) : ""}
+        ${siguiente(p)}
       </article>`).join("")}</div>`;
 }
 
@@ -217,7 +237,9 @@ function detalle(p, pestana, cat) {
       <a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener">Abrir PDF</a>
     </div>
     ${p.estado === "leyendo" ? progreso(p) : ""}
-    ${p.comando ? `<div class="next"><span>Siguiente paso: pégalo en tu agente</span>${comando(p.comando)}</div>` : ""}
+    ${siguiente(p) && `<div class="next"><span>Siguiente paso: pégalo en tu agente o ejecútalo desde aquí</span>${siguiente(p)}</div>`}
+    ${p.ejecucion ? `<details class="sec"${["fallida", "sin_avance"].includes(p.ejecucion.estado) ? " open" : ""} id="registro"><summary><span class="t">Registro de la última ejecución</span><span class="muted">${EJECUCION[p.ejecucion.estado]}</span></summary>
+      <div class="cuerpo"><pre class="log">${h(p.ejecucion.log)}</pre></div></details>` : ""}
     <nav class="tabs">${tabs.map(([k, t]) => `<a href="#/${p.id}/${k}" ${k === pestana ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
     <section>${(vistas[pestana] || vistaFicha)(p, cat)}</section>`;
 }
@@ -292,16 +314,34 @@ function vistaPreguntas(p, cat) {
 }
 
 // ---------- carga y refresco ----------
+function vistaAjustes(c) {
+  const fila = ([k, f]) => `<tr><td>${h(f.nombre)}</td>
+    <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
+      `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}</option>`).join("")}</select></td>
+    <td><input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off"></td></tr>`;
+  return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav><h1>Ajustes</h1>
+    <p class="muted">Qué harness y qué modelo ejecutan cada fase al pulsar «Ejecutar». Sin modelo, se usa el que tenga configurado el harness.
+      El contenido de las memorias llega al proveedor del modelo: usa la herramienta de IA que autorice tu universidad.</p>
+    ${c.error ? error(c.error) : ""}
+    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th><th>Harness</th><th>Modelo</th></tr></thead>
+      <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
+      ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${hv.modelos.map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
+      <button class="btn primary" type="submit">Guardar</button></form>
+    <div class="bloque" style="margin-top:14px"><h3>Harnesses</h3><ul class="items">${Object.values(c.harnesses).map(hv =>
+      `<li><b>${h(hv.nombre)}</b>. ${h(hv.nota)}${hv.problema ? `<p class="error">${h(hv.problema)}</p>` : ""}</li>`).join("")}</ul></div>`;
+}
+
 async function cargar() {
+  const ajustes = location.hash === "#ajustes";
   const [, id, pestana = "ficha", cat] = location.hash.match(/^#\/([a-z0-9-]+)(?:\/(\w+))?(?:\/([a-z0-9-]+))?/) || [];
   let r, txt;
-  try { r = await fetch(id ? `/api/pfgs/${id}` : "/api/pfgs"); txt = await r.text(); }
+  try { r = await fetch(ajustes ? "/api/config" : id ? `/api/pfgs/${id}` : "/api/pfgs"); txt = await r.text(); }
   catch { return aviso("No se puede conectar con el servidor del dashboard."); }
   if (location.hash + txt === pintado) return;
   pintado = location.hash + txt;
   const abiertos = [...document.querySelectorAll("details[open][id]")].map(d => d.id);
   $("#main").innerHTML = !r.ok ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
-    : id ? detalle(JSON.parse(txt), pestana, cat) : rejilla(JSON.parse(txt));
+    : ajustes ? vistaAjustes(JSON.parse(txt)) : id ? detalle(JSON.parse(txt), pestana, cat) : rejilla(JSON.parse(txt));
   abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
 }
 
@@ -330,12 +370,41 @@ function aviso(msg) {
 
 $("#cargar").onclick = () => $("#archivo").click();
 $("#archivo").onchange = e => { subir(e.target.files); e.target.value = ""; };
-document.addEventListener("click", e => {
+async function post(url, cuerpo) {
+  try {
+    const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(cuerpo ?? {})});
+    if (!r.ok) aviso((await r.json().catch(() => ({}))).error || "error " + r.status);
+    return r.ok;
+  } catch { aviso("No se puede conectar con el servidor del dashboard."); }
+}
+document.addEventListener("click", async e => {
+  const accion = e.target.closest("[data-ejecutar], [data-detener]");
+  if (accion) {
+    const id = accion.closest("[data-pfg]").dataset.pfg;
+    accion.disabled = true;
+    if (await post(`/api/pfgs/${id}/${"ejecutar" in accion.dataset ? "ejecutar" : "detener"}`))
+      aviso("ejecutar" in accion.dataset ? "Ejecución lanzada." : "Ejecución detenida.");
+    pintado = ""; return cargar();
+  }
   const b = e.target.closest("[data-copiar]");
   if (!b) return;
   navigator.clipboard.writeText(b.dataset.copiar).then(() => {
     b.textContent = "Copiado"; setTimeout(() => b.textContent = "Copiar", 1500);
   });
+});
+document.addEventListener("change", e => {
+  const k = e.target.dataset.modelo;
+  if (k) document.querySelector(`[name="${k}.modelo"]`).setAttribute("list", `modelos-${e.target.value}`);
+});
+document.addEventListener("submit", async e => {
+  if (e.target.id !== "ajustes") return;
+  e.preventDefault();
+  const cfg = {};
+  for (const [campo, valor] of new FormData(e.target)) {
+    const [fase, clave] = campo.split(".");
+    (cfg[fase] ??= {})[clave] = valor.trim();
+  }
+  if (await post("/api/config", cfg)) { aviso("Ajustes guardados."); pintado = ""; cargar(); }
 });
 let arrastres = 0;
 addEventListener("dragenter", e => { e.preventDefault(); arrastres++; document.body.classList.add("arrastrando"); });
