@@ -56,6 +56,16 @@ def faltan_permisos_agy():
 ESFUERZOS_CLAUDE = ["low", "medium", "high", "xhigh", "max"]
 ESFUERZOS_PI = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 ESFUERZOS_GEMINI = ["low", "medium", "high"]
+# Gratis en OpenCode Zen y sin entrenar con los datos (opencode.ai/docs/zen). Los demás gratuitos pueden usar las
+# memorias para mejorar el modelo o piden no enviarles datos personales.
+# shortcut: lista fija, revísala cuando Zen cambie sus modelos gratuitos.
+OPENCODE_GRATIS = {"opencode/glm-5.3-flash-free": ["low", "high", "max"],
+                   "opencode/deepseek-v4.1-flash-free": ["low", "high", "max"],
+                   "opencode/beam-free": ["low", "medium", "high", "xhigh", "max"]}
+OPENCODE_DEFECTO = "opencode/glm-5.3-flash-free"
+# Lo que no está denegado lo aprueba --auto. execute es Code Mode, que trae fetch y se salta webfetch.
+OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDOS_SKILLS}}, "execute": "deny",
+                     "webfetch": "deny", "websearch": "deny", "external_directory": "deny", "question": "deny"}
 
 # Cómo lanza cada harness una fase sin interacción. Cada uno controla los permisos a su manera.
 # «modelos» son las sugerencias con los niveles de esfuerzo que acepta cada una; «esfuerzos», los del modelo por
@@ -80,6 +90,15 @@ HARNESSES = {
            "nota": "Pi no tiene permisos: puede ejecutar cualquier comando sin preguntar.",
            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--no-session", "--approve", *opcion("--model", modelo),
                                                      *opcion("--thinking", esfuerzo)]},
+    # --standalone: el servicio de fondo de opencode no vería la configuración de esta carpeta ni la de env.
+    "opencode": {"nombre": "OpenCode (modelos gratis)", "bin": "opencode", "modelos": OPENCODE_GRATIS,
+                 "esfuerzos": OPENCODE_GRATIS[OPENCODE_DEFECTO], "solo_modelos": True,
+                 "nota": "Solo modelos gratuitos de OpenCode Zen que no entrenan con los datos. Solo puede ejecutar "
+                         "scripts/pfg.py y python3 -m json.tool, sin web; deniega el resto sin preguntar.",
+                 "env": {"OPENCODE_CONFIG_CONTENT": json.dumps({"permission": OPENCODE_PERMISOS})},
+                 "args": lambda prompt, modelo, esfuerzo: [
+                     "run", "--standalone", "--auto", "-m",
+                     (modelo or OPENCODE_DEFECTO) + (f"#{esfuerzo}" if esfuerzo else ""), prompt]},
 }
 
 EJECUCIONES = {}  # id -> ejecución en memoria; se pierde al parar el servidor, que además detiene las que sigan en curso
@@ -227,6 +246,8 @@ def validar_config(raw):
             raise ValueError(f"{fase}: harness desconocido {harness!r}")
         if not isinstance(modelo, str) or not MODELO.fullmatch(modelo):
             raise ValueError(f"{fase}: modelo no válido {modelo!r}")
+        if modelo and HARNESSES[harness].get("solo_modelos") and modelo not in HARNESSES[harness]["modelos"]:
+            raise ValueError(f"{fase}: {HARNESSES[harness]['nombre']} solo admite " + ", ".join(HARNESSES[harness]["modelos"]))
         if esfuerzo and esfuerzo not in niveles(harness, modelo):
             raise ValueError(f"{fase}: {HARNESSES[harness]['nombre']} no admite el esfuerzo {esfuerzo!r} con "
                              + (f"el modelo {modelo}" if modelo else "su modelo por defecto"))
@@ -308,9 +329,10 @@ def lanzar(d, fase=None, seguir=False):
         with open(log, "w", encoding="utf-8") as f:
             f.write(f"$ {shlex.join(argv)}\n\n")
             f.flush()
-            # Grupo propio para poder detener también los subprocesos del agente.
+            # Grupo propio para poder detener también los subprocesos del agente. PWD: opencode lo prefiere a cwd.
             proc = subprocess.Popen(argv, cwd=RAIZ, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT,
-                                    start_new_session=True)
+                                    start_new_session=True,
+                                    env={**os.environ, "PWD": str(RAIZ), **HARNESSES[cfg["harness"]].get("env", {})})
         EJECUCIONES[d.name] = {"fase": fase, "harness": cfg["harness"], "modelo": cfg["modelo"],
                                "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc,
                                "seguir": seguir}

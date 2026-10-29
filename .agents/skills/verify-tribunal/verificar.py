@@ -32,7 +32,7 @@ REPO = Path(__file__).resolve().parents[3]
 BASE = Path(os.environ.get("TMPDIR", "/tmp")) / "tribunal-pfg-verify"
 COPIA = ["dashboard/server.py", "dashboard/index.html", "scripts/pfg.py", "config/categorias.json",
          "AGENTS.md", "CLAUDE.md",  # los agentes que lanza el dashboard necesitan las reglas y las skills
-         *sorted(str(p.relative_to(REPO)) for p in (REPO / ".agents").rglob("*") if p.is_file())]
+         *sorted(str(p.relative_to(REPO)) for d in (".agents", ".opencode") for p in (REPO / d).rglob("*") if p.is_file())]
 FASES = ["troceado", "leyendo", "leido", "preguntas", "clasificadas"]
 
 

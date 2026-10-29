@@ -34,4 +34,4 @@ El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También p
 ## Desarrollo
 
 - Test: `uv run tests/test_pfg.py` y `uv run tests/test_dashboard.py`
-- Las instrucciones de los subagentes están en `.agents/agents/*.md`, que es la fuente única. `.claude/agents` es un enlace a esa carpeta, y `.codex/agents/*.toml` solo apunta a esos archivos y fija el modelo de Codex.
+- Las instrucciones de los subagentes están en `.agents/agents/*.md`, que es la fuente única. `.claude/agents` es un enlace a esa carpeta, `.codex/agents/*.toml` solo apunta a esos archivos y fija el modelo de Codex, y `.opencode/agents/*.md` solo apunta a ellos y hereda el modelo de la sesión.

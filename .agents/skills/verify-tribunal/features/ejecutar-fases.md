@@ -1,6 +1,6 @@
 # Ejecutar fases y ajustes
 
-El docente elige en Ajustes qué harness (Claude Code, Antigravity o Pi), qué modelo y qué esfuerzo de razonamiento ejecuta cada fase. Después pulsa el botón de la fase («Leer la memoria con …», «Generar las preguntas con …» o «Clasificar las preguntas con …») en la tarjeta o en el detalle, y el dashboard lanza el agente en modo no interactivo. La tarjeta muestra la ejecución en curso con un botón «Detener». Al terminar se ve el resultado, y en el detalle aparece el registro de la ejecución.
+El docente elige en Ajustes qué harness (Claude Code, Antigravity, Pi u OpenCode), qué modelo y qué esfuerzo de razonamiento ejecuta cada fase. Después pulsa el botón de la fase («Leer la memoria con …», «Generar las preguntas con …» o «Clasificar las preguntas con …») en la tarjeta o en el detalle, y el dashboard lanza el agente en modo no interactivo. La tarjeta muestra la ejecución en curso con un botón «Detener». Al terminar se ve el resultado, y en el detalle aparece el registro de la ejecución.
 
 ## Sub-features
 
