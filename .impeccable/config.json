@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "dashboard/index.html"
+        ],
+        "createdAt": "2026-10-29T09:03:21.725Z",
+        "reason": "Claude's judgment: .ejec.en_curso dot only renders while an agent subprocess is actually running (estado en_curso), so the pulse reflects real live state; disabled under prefers-reduced-motion"
+      }
+    ]
+  }
+}

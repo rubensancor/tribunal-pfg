@@ -52,7 +52,7 @@ Manejadores estables de la UI (no uses coordenadas):
 | Subir PDF | `get_by_role("button", name="Cargar PFG")` + `page.expect_file_chooser()` |
 | Aviso tras una acción | `get_by_role("status")` (por ejemplo `1 PDF cargado.`) |
 | Tarjeta de un PFG | `get_by_role("article").filter(has=get_by_role("link", name=<título o id>))` |
-| Siguiente paso | `locator("code")` dentro de la tarjeta o del bloque «Siguiente paso»; botón `Copiar` → `Copiado` |
+| Siguiente paso | botón «o copia la instrucción para tu agente» en la tarjeta (atributo `data-copiar`), o `locator("code")` y botón `Copiar` en el bloque «Siguiente paso» del detalle; ambos pasan a `Copiado` |
 | Progreso de lectura | `get_by_role("progressbar")`, atributos `aria-valuenow`/`aria-valuemax` |
 | Pestañas del detalle | enlaces `Ficha de lectura`, `Secciones · N/M`, `Preguntas · N`; la activa lleva `aria-current="page"` |
 | Filtro por categoría | `get_by_role("navigation", name="Filtrar por categoría")`; el chip activo lleva `aria-current="true"` |

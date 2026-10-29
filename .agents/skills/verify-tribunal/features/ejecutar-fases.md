@@ -1,14 +1,14 @@
 # Ejecutar fases y ajustes
 
-El docente elige en Ajustes qué harness (Claude Code, Antigravity o Pi) y qué modelo ejecuta cada fase. Después pulsa «Ejecutar con …» en la tarjeta o en el detalle, y el dashboard lanza el agente en modo no interactivo. La tarjeta muestra la ejecución en curso con un botón «Detener». Al terminar se ve el resultado, y en el detalle aparece el registro de la ejecución.
+El docente elige en Ajustes qué harness (Claude Code, Antigravity o Pi) y qué modelo ejecuta cada fase. Después pulsa el botón de la fase («Leer la memoria con …», «Generar las preguntas con …» o «Clasificar las preguntas con …») en la tarjeta o en el detalle, y el dashboard lanza el agente en modo no interactivo. La tarjeta muestra la ejecución en curso con un botón «Detener». Al terminar se ve el resultado, y en el detalle aparece el registro de la ejecución.
 
 ## Sub-features
 
 - `ajustes-guardar`: guardar el harness y el modelo de cada fase en `config/ejecucion.json`.
 - `ajustes-validar`: un modelo que empieza por `-` o lleva espacios se rechaza con `modelo no válido`.
 - `ajustes-avisos`: la lista de harnesses avisa si falta un binario o, en el caso de agy, la regla de permisos.
-- `ejecutar-lanzar`: «Ejecutar con <harness>» lanza la fase siguiente; la tarjeta pasa a `Ejecutando: <fase> con <harness> (<modelo>)`.
-- `ejecutar-terminar`: la fase avanza (Leído, Sin clasificar o Listo) y el botón pasa a la fase siguiente.
+- `ejecutar-lanzar`: «Leer la memoria con <harness>» lanza la fase siguiente; la tarjeta pasa a `Ejecutando: <fase> con <harness> (<modelo>)`.
+- `ejecutar-terminar`: la fase avanza (Leído, Preguntas sin clasificar o Listo) y el botón pasa a la fase siguiente.
 - `ejecutar-sin-avance`: si sale con 0 sin que el PFG cambie de fase, aparece `Terminó sin completar la fase` y el registro se abre solo.
 - `ejecutar-detener`: «Detener» mata el grupo de procesos y la tarjeta muestra `Detenida`.
 - `ejecutar-origen`: un POST con `Origin` de otra web recibe 403.
@@ -16,7 +16,7 @@ El docente elige en Ajustes qué harness (Claude Code, Antigravity o Pi) y qué 
 ## How to get to it (user POV)
 
 - Pulsar «Ajustes» en la cabecera (`#ajustes`).
-- Pulsar «Ejecutar con <harness>» en una tarjeta o en el bloque «Siguiente paso» del detalle.
+- Pulsar «<acción> con <harness>» en una tarjeta o en el bloque «Siguiente paso» del detalle.
 - Pulsar «Detener» mientras se ejecuta.
 
 ## Driving it with verificar.py
@@ -29,7 +29,7 @@ Preconditions:
 
 - **Guardar.** En `#ajustes`, `page.get_by_label("Harness de Lectura de la memoria").select_option("claude")` y `page.get_by_label("Modelo de Lectura de la memoria").fill("haiku")`. Haz lo mismo con «Preguntas para la defensa» (`pi`, `openai-codex/gpt-6-luna`) y pulsa `Guardar`. El estado es `Ajustes guardados.` y `json.loads((pfgs.parent / "config" / "ejecucion.json").read_text())` contiene los dos valores.
 - **Validar.** Rellena el modelo con `--dangerously-skip-permissions` y guarda. El estado contiene `modelo no válido` y el archivo no cambia.
-- **Lanzar y terminar.** En la tarjeta, `get_by_role("button", name="Ejecutar con Claude Code").click()`. Aparece `Ejecutando: Lectura de la memoria con Claude Code (haiku)` y el botón `Detener`. Espera con `page.get_by_text("Ejecutando:").wait_for(state="detached", timeout=900_000)`. La insignia pasa a `Leído` y `uv run "$($V estado app)/scripts/pfg.py" validar <id>` imprime `ok`. Luego pulsa «Ejecutar con Pi» para las preguntas. Con la memoria sintética, el resultado esperado es `Terminó sin completar la fase` y un registro en el que el agente se niega a inventar preguntas (ver Gotchas).
+- **Lanzar y terminar.** En la tarjeta, `get_by_role("button", name="Leer la memoria con Claude Code").click()`. Aparece `Ejecutando: Lectura de la memoria con Claude Code (haiku)` y el botón `Detener`. Espera con `page.get_by_text("Ejecutando:").wait_for(state="detached", timeout=900_000)`. La insignia pasa a `Leído` y `uv run "$($V estado app)/scripts/pfg.py" validar <id>` imprime `ok`. Luego pulsa «Generar las preguntas con Pi». Con la memoria sintética, el resultado esperado es `Terminó sin completar la fase` y un registro en el que el agente se niega a inventar preguntas (ver Gotchas).
 - **Detener.** Lanza otra memoria y pulsa `Detener`. El estado es `Ejecución detenida.`, la tarjeta muestra `Detenida: …` y `pgrep -fl "<id>"` no encuentra procesos.
 - **Sin avance.** Pon agy en la lectura y ejecútalo sin la regla de permisos. La tarjeta muestra `Terminó sin completar la fase: Lectura de la memoria con Antigravity (agy)` y en el detalle `pre.log` contiene `auto-denied`.
 - **Origen.** `page.request.post(url + "/api/config", data="{}", headers={"Origin": "https://evil.example"})` devuelve 403.

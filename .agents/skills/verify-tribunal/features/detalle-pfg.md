@@ -9,7 +9,7 @@ Al abrir una tarjeta se ve el detalle: la cabecera con la ficha, el enlace al PD
 - `detalle-preguntas`: las preguntas ordenadas por prioridad, con su anclaje y «Cómo valorar la respuesta».
 - `detalle-filtro`: los chips de categoría con su recuento. Filtran por la ruta `#/<id>/preguntas/<categoría>`.
 - `detalle-pdf`: «Abrir PDF» y los enlaces de página abren `/pfgs/<id>/memoria.pdf#page=N`.
-- `detalle-vacios`: estados vacíos («Todavía no hay ficha de lectura», «La memoria aún no está troceada», «Todavía no hay preguntas»).
+- `detalle-vacios`: estados vacíos («Todavía no hay ficha de lectura», «Todavía no hay secciones», «Todavía no hay preguntas»).
 - `detalle-inexistente`: `#/no-existe` muestra «Ese PFG no existe».
 
 ## How to get to it (user POV)
@@ -25,7 +25,7 @@ Preconditions:
 - `memoria-demo-verificacion` subido por la UI.
 - `$V fase memoria-demo-verificacion clasificadas` sale con `ok`. Las 3 preguntas sintéticas quedan clasificadas así: `validacion` ×2 y `decisiones-diseno` ×1.
 
-- **Vacíos.** Antes de ejecutar `fase`, con el PDF recién subido, `page.goto(url + "/#/memoria-demo-verificacion")`. Se ven `Todavía no hay ficha de lectura`, en `#/memoria-demo-verificacion/secciones` se ve `La memoria aún no está troceada` y en `#/memoria-demo-verificacion/preguntas` se ve `Todavía no hay preguntas`.
+- **Vacíos.** Antes de ejecutar `fase`, con el PDF recién subido, `page.goto(url + "/#/memoria-demo-verificacion")`. Se ven `Todavía no hay ficha de lectura`, en `#/memoria-demo-verificacion/secciones` se ve `Todavía no hay secciones` y en `#/memoria-demo-verificacion/preguntas` se ve `Todavía no hay preguntas`.
 - **Abrir la ficha.** `page.get_by_role("link", name="Memoria sintética de verificación").click()`. `expect(page.get_by_role("heading", level=1)).to_have_text("Memoria sintética de verificación")` y `expect(page.get_by_role("heading", name="Qué hace")).to_be_visible()`. `ev("detalle-ficha")`.
 - **Secciones.** `page.get_by_role("link", name="Secciones · ").click()` y después `page.locator("details.sec summary").first.click()`. Se ve la etiqueta `Sin evidencia` y el resumen `[sintético] Resumen de …`. `ev("detalle-secciones")`.
 - **Preguntas.** `page.get_by_role("link", name="Preguntas · 3").click()`. `expect(page.locator("li.q")).to_have_count(3)` y el chip `Todas` lleva `aria-current="true"`.
