@@ -1,6 +1,6 @@
 # Detalle de un PFG
 
-Al abrir una tarjeta se ve el detalle: la cabecera con la ficha, el enlace al PDF y tres pestañas. «Ficha de lectura» muestra el análisis, «Secciones» los resúmenes por sección con sus tensiones y «Preguntas» las preguntas ordenadas por prioridad, con un filtro por categoría cuando ya están clasificadas. Todo lo que se afirma enlaza a su página del PDF.
+Al abrir una tarjeta se ve el detalle: la cabecera con la ficha, el enlace al PDF, el botón «Borrar» y tres pestañas. «Ficha de lectura» muestra el análisis, «Secciones» los resúmenes por sección con sus tensiones y «Preguntas» las preguntas ordenadas por prioridad, con un filtro por categoría cuando ya están clasificadas. Todo lo que se afirma enlaza a su página del PDF.
 
 ## Sub-features
 
@@ -11,6 +11,7 @@ Al abrir una tarjeta se ve el detalle: la cabecera con la ficha, el enlace al PD
 - `detalle-pdf`: «Abrir PDF» y los enlaces de página abren `/pfgs/<id>/memoria.pdf#page=N`.
 - `detalle-vacios`: estados vacíos («Todavía no hay ficha de lectura», «Todavía no hay secciones», «Todavía no hay preguntas»).
 - `detalle-inexistente`: `#/no-existe` muestra «Ese PFG no existe».
+- `detalle-borrar`: «Borrar» pide confirmación y borra `pfgs/<id>/` entero, con el PDF, los resúmenes, la ficha, las preguntas y los registros. Vuelve a la lista con `PFG borrado.`. Con una ejecución en curso se niega con `detén la ejecución en curso antes de borrar este PFG`.
 
 ## How to get to it (user POV)
 
@@ -32,6 +33,7 @@ Preconditions:
 - **Filtro.** `page.get_by_role("navigation", name="Filtrar por categoría").get_by_role("link", name="Validación y pruebas").click()`. `expect(page.locator("li.q")).to_have_count(2)` y `location.hash` es `#/memoria-demo-verificacion/preguntas/validacion`. `ev("detalle-filtro")`.
 - **PDF.** `r = page.request.get(url + "/pfgs/memoria-demo-verificacion/memoria.pdf")`, con `r.ok`, `r.headers["content-type"] == "application/pdf"` y `r.body().startswith(b"%PDF")`. El enlace «Abrir PDF» tiene `href` `/pfgs/memoria-demo-verificacion/memoria.pdf`.
 - **Inexistente.** `page.goto(url + "/#/no-existe")`. Se ve `Ese PFG no existe` con el enlace `Volver`.
+- **Borrar.** Sube una segunda memoria y ponla en `leido`. En su detalle, `page.once("dialog", lambda d: d.dismiss())` y pulsa `Borrar`: la carpeta sigue igual. Repite con `d.accept()`. El estado es `PFG borrado.`, la URL vuelve a `#/`, `(pfgs / <id>).exists()` es falso, `GET /api/pfgs/<id>` y `/pfgs/<id>/memoria.pdf` devuelven 404 y la otra memoria sigue en disco. Con `Origin: https://evil.example`, `POST /api/pfgs/<id>/borrar` devuelve 403.
 
 ## Gotchas
 

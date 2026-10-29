@@ -211,6 +211,15 @@ def lanzar(d):
                                "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc}
 
 
+def borrar(d):
+    """Borra el PDF y todo lo generado. ValueError si un agente sigue escribiendo en la carpeta."""
+    with CERROJO:
+        if (e := EJECUCIONES.get(d.name)) and e["proc"].poll() is None:
+            raise ValueError("detén la ejecución en curso antes de borrar este PFG")
+        EJECUCIONES.pop(d.name, None)
+        shutil.rmtree(d)
+
+
 def detener(e):
     if e["proc"].poll() is None:
         try:
@@ -309,6 +318,9 @@ class Handler(BaseHTTPRequestHandler):
             if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/ejecutar"):
                 lanzar(d)
                 return self.responder(201, {"ok": True})
+            if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/borrar"):
+                borrar(d)
+                return self.responder(200, {"ok": True})
             if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/detener"):
                 if e := EJECUCIONES.get(d.name):
                     detener(e)

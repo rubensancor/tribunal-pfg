@@ -69,6 +69,8 @@ h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.01
 .cmd button { font-size: 12.5px; padding: 4px 10px; }
 .accion { position: relative; z-index: 1; display: grid; gap: 8px; }
 .accion .botones { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.btn.peligro { color: var(--bad); }
+.btn.peligro:hover { border-color: var(--bad); }
 .btn.enlace { border: 0; background: none; padding: 2px 0; color: var(--accent); font-size: 13px; }
 .btn.enlace:hover { text-decoration: underline; text-underline-offset: 3px; }
 .accion p { margin: 0; font-size: 13px; }
@@ -91,6 +93,7 @@ ol.pasos { display: inline-grid; gap: 4px; text-align: left; margin: 14px 0 0; p
 .error { background: var(--bad-soft); color: var(--bad); padding: 10px 14px; border-radius: 8px; }
 
 .det-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.det-head .botones { display: flex; gap: 8px; }
 .crumbs a { text-decoration: none; font-size: 14px; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 20px 0; overflow-x: auto; }
 .tabs a { padding: 10px 14px; text-decoration: none; color: var(--muted); font-weight: 550; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
@@ -274,7 +277,8 @@ function detalle(p, pestana, cat) {
   return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav>
     <div class="det-head">
       <div><h1>${h(titulo(p))}</h1><p class="muted"><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span> ${sub}</p></div>
-      <a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener">Abrir PDF</a>
+      <div class="botones"><a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener">Abrir PDF</a>
+        <button class="btn peligro" type="button" data-borrar="${p.id}" data-titulo="${h(titulo(p))}">Borrar</button></div>
     </div>
     ${p.estado === "leyendo" ? progreso(p) : ""}
     ${siguiente(p) && `<div class="next"><b>Siguiente paso</b>${siguiente(p, true)}</div>`}
@@ -455,6 +459,12 @@ document.addEventListener("click", async e => {
     if (await post(`/api/pfgs/${id}/${"ejecutar" in accion.dataset ? "ejecutar" : "detener"}`))
       aviso("ejecutar" in accion.dataset ? "Ejecución lanzada." : "Ejecución detenida.");
     pintado = ""; return cargar();
+  }
+  const borrar = e.target.closest("[data-borrar]");
+  if (borrar) {
+    if (!confirm(`¿Borrar «${borrar.dataset.titulo}»? Se borran el PDF y todo lo generado a partir de él: resúmenes, ficha, preguntas y registros. No se puede deshacer.`)) return;
+    if (await post(`/api/pfgs/${borrar.dataset.borrar}/borrar`)) { aviso("PFG borrado."); location.hash = "#/"; }
+    return;
   }
   if (e.target.closest("[data-imprimir]")) return print();
   const b = e.target.closest("[data-copiar]");

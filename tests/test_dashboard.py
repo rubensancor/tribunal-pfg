@@ -88,4 +88,13 @@ with tempfile.TemporaryDirectory() as tmp:
     (d / "clasificacion.json").write_text("{}")
     assert "todas las fases" in falla(server.lanzar, d)
 
+    server.PROMPT = "{comando} dormir"
+    (d / "clasificacion.json").unlink()
+    server.lanzar(d)
+    assert "detén la ejecución" in falla(server.borrar, d) and (d / "memoria.pdf").exists(), "no borra con un agente en marcha"
+    server.detener(server.EJECUCIONES["demo"])
+    esperar("detenida")
+    server.borrar(d)
+    assert not d.exists() and "demo" not in server.EJECUCIONES
+
 print("ok")
