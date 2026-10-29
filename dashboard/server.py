@@ -63,9 +63,11 @@ OPENCODE_GRATIS = {"opencode/glm-5.3-flash-free": ["low", "high", "max"],
                    "opencode/deepseek-v4.1-flash-free": ["low", "high", "max"],
                    "opencode/beam-free": ["low", "medium", "high", "xhigh", "max"]}
 OPENCODE_DEFECTO = "opencode/glm-5.3-flash-free"
-# Lo que no está denegado lo aprueba --auto. execute es Code Mode, que trae fetch y se salta webfetch.
+# Lo que no está denegado lo aprueba --auto. execute es Code Mode, que trae fetch y se salta webfetch. grep no
+# filtra por ruta: con una carpeta concreta devolvería las notas personales aunque read las deniegue.
 OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDOS_SKILLS}}, "execute": "deny",
-                     "webfetch": "deny", "websearch": "deny", "external_directory": "deny", "question": "deny"}
+                     "webfetch": "deny", "websearch": "deny", "external_directory": "deny", "question": "deny",
+                     "read": {"*": "allow", f"*{TIPOS['personal']}": "deny"}, "grep": "deny"}
 
 # Cómo lanza cada harness una fase sin interacción. Cada uno controla los permisos a su manera.
 # «modelos» son las sugerencias con los niveles de esfuerzo que acepta cada una; «esfuerzos», los del modelo por
@@ -94,7 +96,7 @@ HARNESSES = {
     "opencode": {"nombre": "OpenCode (modelos gratis)", "bin": "opencode", "modelos": OPENCODE_GRATIS,
                  "esfuerzos": OPENCODE_GRATIS[OPENCODE_DEFECTO], "solo_modelos": True,
                  "nota": "Solo modelos gratuitos de OpenCode Zen que no entrenan con los datos. Solo puede ejecutar "
-                         "scripts/pfg.py y python3 -m json.tool, sin web; deniega el resto sin preguntar.",
+                         "scripts/pfg.py y python3 -m json.tool, sin web ni tus notas personales; deniega el resto sin preguntar.",
                  "env": {"OPENCODE_CONFIG_CONTENT": json.dumps({"permission": OPENCODE_PERMISOS})},
                  "args": lambda prompt, modelo, esfuerzo: [
                      "run", "--standalone", "--auto", "-m",
