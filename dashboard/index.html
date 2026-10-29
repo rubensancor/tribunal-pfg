@@ -10,12 +10,13 @@
   --accent: #1f4fd1; --accent-soft: #e9eefc; --warn: #9a5800; --warn-soft: #fcf0dc;
   --ok: #1b7543; --ok-soft: #e2f3e9; --bad: #b42318; --bad-soft: #fcebe9; --violet: #6a3fc1; --violet-soft: #f0eafb;
   --radius: 10px; --shadow: 0 1px 2px rgb(0 0 0 / .05); color-scheme: light;
+  --lw: clamp(560px, 56vw, 1000px); --resalte: 30%;
 }
 :root[data-tema="noche"] {
   --bg: #131315; --panel: #1c1c1f; --ink: #ececef; --muted: #9b9ba3; --line: #2c2c32;
   --accent: #84a6ff; --accent-soft: #1d2744; --warn: #f0b25a; --warn-soft: #362816;
   --ok: #6fd39a; --ok-soft: #15301f; --bad: #ff8a80; --bad-soft: #3a1b19; --violet: #b99bff; --violet-soft: #2a2140;
-  --shadow: none; color-scheme: dark;
+  --shadow: none; color-scheme: dark; --resalte: 48%;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -227,9 +228,73 @@ ol.preguntas { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px
 
 #suelta { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; background: color-mix(in srgb, var(--accent) 14%, var(--bg)); border: 3px dashed var(--accent); font-size: 20px; font-weight: 650; color: var(--accent); }
 body.arrastrando #suelta { display: grid; }
-#aviso { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#aviso { position: fixed; z-index: 30; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #aviso.visible { opacity: 1; }
 
+#lector { position: fixed; z-index: 6; top: 0; right: 0; bottom: 0; width: var(--lw); display: grid; grid-template-rows: auto minmax(0, 1fr);
+  background: var(--panel); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgb(0 0 0 / .08); }
+#lector[hidden], #pop[hidden] { display: none; }
+@media (min-width: 1100px) {
+  body.con-lector .wrap { max-width: none; margin: 0 var(--lw) 0 0; }
+  body.con-lector .ficha { grid-template-columns: 1fr; }
+  body.con-lector .det-head { flex-direction: column; }
+}
+.lector-barra { display: flex; align-items: center; gap: 6px; height: 61px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.lector-barra .btn { padding: 5px 10px; }
+.lector-barra .donde { margin-right: auto; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lector-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 36%); min-height: 0; }
+.lector-cuerpo.sin-notas { grid-template-columns: minmax(0, 1fr); }
+.lector-cuerpo.sin-notas .notas { display: none; }
+.hojas { position: relative; overflow: auto; padding: 16px; background: color-mix(in srgb, var(--ink) 7%, var(--bg)); outline: none; }
+.pagina { position: relative; container-type: size; width: calc(var(--w) * var(--escala, 1) * 1px); height: calc(var(--h) * var(--escala, 1) * 1px);
+  margin: 0 auto 14px; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .18); }
+.pagina img, .pagina .resaltes, .pagina .capa { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pagina img:not([src]) { visibility: hidden; }
+.pagina[data-error]::after { content: attr(data-error); position: absolute; inset: 0; display: grid; place-items: center; color: var(--bad); font-size: 14px; }
+.resaltes div { position: absolute; border-radius: 2px; background: color-mix(in srgb, var(--c) var(--resalte), transparent); mix-blend-mode: multiply; }
+.resaltes div.activa { outline: 2px solid var(--c); outline-offset: 1px; }
+.capa { overflow: hidden; line-height: 1; }
+.capa span { position: absolute; color: transparent; white-space: pre; transform-origin: 0 0; cursor: text; }
+.capa span::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.notas { overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 10px; padding: 12px; border-left: 1px solid var(--line); }
+#enviar { display: grid; gap: 8px; }
+#enviar:empty { display: none; }
+#enviar .btn { white-space: normal; text-align: left; }
+.notas .ejec { margin: 0; }
+.lista-notas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.lista-notas:not(:empty) + .vacio-notas { display: none; }
+.vacio-notas { margin: 0; font-size: 13.5px; }
+.vacio-notas span { display: block; margin-top: 6px; }
+.nota { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 8px; background: var(--panel); }
+.nota.activa { border-color: var(--c); box-shadow: 0 0 0 3px var(--c-soft); }
+.nota .cab { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12.5px; }
+.nota select { font: inherit; font-weight: 650; color: var(--c); background: var(--c-soft); border: 0; border-radius: 99px; padding: 2px 6px; cursor: pointer; }
+.nota .cab .btn { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.nota blockquote { margin: 0; padding-left: 10px; border-left: 2px solid var(--c); font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.nota blockquote:empty { display: none; }
+.nota textarea { width: 100%; min-height: 40px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; resize: vertical; }
+.nota .estado { font-size: 12.5px; color: var(--muted); }
+.nota .estado.pendiente { color: var(--accent); font-weight: 550; }
+.nota .pie:empty { display: none; }
+.respuesta { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); font-size: 13.5px; }
+.respuesta b { font-size: 12px; color: var(--accent); }
+.respuesta ul { margin: 0; padding-left: 16px; }
+button.pag { border: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; }
+#pop { position: fixed; z-index: 8; display: flex; flex-wrap: wrap; gap: 2px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 10px;
+  background: var(--ink); box-shadow: 0 8px 24px rgb(0 0 0 / .25); }
+#pop button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--bg); font: inherit; font-size: 13px; font-weight: 550; cursor: pointer; }
+#pop button::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c-soft); box-shadow: inset 0 0 0 2px var(--c); }
+#pop button:hover, #pop button:focus-visible { background: color-mix(in srgb, var(--bg) 16%, var(--ink)); outline: none; }
+@media (max-width: 1099px) {
+  #lector { left: 0; width: auto; z-index: 7; border: 0; }
+  body.con-lector { overflow: hidden; }
+}
+@media (max-width: 720px) {
+  .lector-cuerpo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 42%; }
+  .notas { border-left: 0; border-top: 1px solid var(--line); }
+  .lector-barra { gap: 4px; padding: 0 8px; }
+  .lector-barra [data-nota-pagina] { display: none; }
+}
 @media (max-width: 720px) {
   .marca span, .barra .btn, .top label.btn { display: none; }
   .marca { white-space: nowrap; font-size: 16px; }
@@ -248,7 +313,7 @@ body.arrastrando #suelta { display: grid; }
 }
 @media print {
   body { background: #fff; color: #000; font-size: 12pt; }
-  .top, .tabs, .barra, .next, #registro, .crumbs, .det-head .btn { display: none !important; }
+  .top, .tabs, .barra, .next, #registro, .crumbs, .det-head .btn, #lector, #pop { display: none !important; }
   .q, .bloque, details.sec { box-shadow: none; break-inside: avoid; border-color: #ccc; }
   .q details summary { display: none; }
   .pag { background: none; padding: 0; color: #000; }
@@ -283,6 +348,28 @@ aplicarTema();
   </div>
 </header>
 <main class="wrap" id="main" aria-live="polite"></main>
+<aside id="lector" aria-label="Lector de la memoria" hidden>
+  <div class="lector-barra">
+    <button class="btn" type="button" data-cerrar-lector aria-label="Cerrar el lector" title="Cerrar (Esc)">✕</button>
+    <span class="donde" id="donde" aria-live="polite"></span>
+    <button class="btn" type="button" data-mover="-1" aria-label="Página anterior" title="Página anterior (←)">←</button>
+    <button class="btn" type="button" data-mover="1" aria-label="Página siguiente" title="Página siguiente (→)">→</button>
+    <button class="btn" type="button" data-zoom="-1" aria-label="Reducir">−</button>
+    <button class="btn" type="button" data-zoom="1" aria-label="Ampliar">+</button>
+    <button class="btn" type="button" data-nota-pagina>Nota en esta página</button>
+    <button class="btn" type="button" data-ver-notas aria-controls="notas" aria-expanded="true">Notas · 0</button>
+  </div>
+  <div class="lector-cuerpo">
+    <div class="hojas" id="hojas" tabindex="-1"></div>
+    <section class="notas" id="notas" aria-label="Notas">
+      <div id="enviar"></div>
+      <ol class="lista-notas" id="lista-notas"></ol>
+      <p class="muted vacio-notas">Selecciona texto en la memoria para resaltarlo o anotarlo.
+        <span>Las notas personales solo las ves tú. Las preguntas al agente las responde el agente cuando las envías, y las notas «Para las preguntas» se tienen en cuenta al generar las preguntas de la defensa.</span></p>
+    </section>
+  </div>
+</aside>
+<div id="pop" role="toolbar" aria-label="Anotar la selección" hidden></div>
 <div id="suelta">Suelta los PDF para cargarlos</div>
 <div id="aviso" role="status"></div>
 <div id="seleccion" role="region" aria-label="Selección"></div>
@@ -306,8 +393,9 @@ const TENSIONES = {sin_justificar: "Sin justificar", sin_evidencia: "Sin evidenc
 let pintado = "";  // última respuesta pintada: solo se repinta si algo cambia
 
 // ---------- piezas ----------
+// Un clic abre el lector del dashboard; con ⌘ o Ctrl sigue abriendo el visor del navegador.
 const pag = (id, o) => Number.isInteger(o?.pdf)
-  ? `<a class="pag" href="/pfgs/${id}/memoria.pdf#page=${o.pdf}" target="_blank" rel="noopener">${o.pag ? "pág. " + h(o.pag) : "PDF " + o.pdf}</a>` : "";
+  ? `<a class="pag" href="/pfgs/${id}/memoria.pdf#page=${o.pdf}" target="_blank" rel="noopener" data-leer="${id}" data-pdf="${o.pdf}">${o.pag ? "pág. " + h(o.pag) : "PDF " + o.pdf}</a>` : "";
 const items = (id, xs, extra = () => "") => lista(xs).length
   ? `<ul class="items">${lista(xs).map(x => `<li>${extra(x)}${h(x?.texto ?? x)} ${pag(id, x)}</li>`).join("")}</ul>`
   : `<p class="muted">—</p>`;
@@ -408,7 +496,7 @@ function detalle(p, pestana, cat) {
   return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav>
     <div class="det-head">
       <div><h1>${h(titulo(p))}</h1><p class="muted"><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span> ${sub}</p></div>
-      <div class="botones"><a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener">Abrir PDF</a>
+      <div class="botones"><a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener" data-leer="${p.id}" title="Con ⌘ o Ctrl, en el visor del navegador">Leer memoria</a>
         <button class="btn peligro" type="button" data-borrar="${p.id}" ${datosBorrado(p)}>Borrar</button></div>
     </div>
     ${p.estado === "leyendo" ? progreso(p) : ""}
@@ -524,12 +612,15 @@ async function cargar() {
   if (location.hash + txt === pintado) return;
   pintado = location.hash + txt;
   const abiertos = [...document.querySelectorAll("details[open][id]")].map(d => d.id);
+  const datos = r.ok ? JSON.parse(txt) : null;
   $("#main").innerHTML = r.status === 404 && id ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
     : !r.ok ? vacio("El dashboard no ha podido cargar esta página", `<p>${h(JSON.parse(txt || "{}").error || "error " + r.status)}.
         Si acabas de actualizar el dashboard, reinicia el servidor (Ctrl+C y <code>uv run dashboard/server.py</code>).</p><p><a href="#/">Volver</a></p>`)
-    : ajustes ? vistaAjustes(JSON.parse(txt)) : id ? detalle(JSON.parse(txt), pestana, cat) : rejilla(JSON.parse(txt));
+    : ajustes ? vistaAjustes(datos) : id ? detalle(datos, pestana, cat) : rejilla(datos);
   abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
   repintarSeleccion();
+  if (lector.id && lector.id !== id) cerrarLector();
+  else if (lector.id && datos) ponerNotas(datos);
 }
 
 // Resuelve con los elementos que se pueden borrar, o [] si se cancela. Los que tienen una ejecución en curso se quedan.
@@ -542,7 +633,7 @@ function confirmarBorrado(items) {
     ? `<li class="queda"><span class="t">${h(i.dataset.titulo)}</span><span class="d">Tiene una ejecución en curso: no se borrará</span></li>`
     : `<li><span class="t">${h(i.dataset.titulo)}</span><span class="d">${h(i.dataset.detalle)}</span></li>`).join("");
   $("#confirmar-nota").textContent = !n ? "Detén la ejecución y vuelve a intentarlo."
-    : `${n === 1 ? "Se borran el PDF y todo lo generado a partir de él" : "Se borran los PDF y todo lo generado a partir de ellos"}: resúmenes, fichas, preguntas y registros. No se puede deshacer.`;
+    : `${n === 1 ? "Se borran el PDF y todo lo generado a partir de él" : "Se borran los PDF y todo lo generado a partir de ellos"}: resúmenes, fichas, preguntas, notas y registros. No se puede deshacer.`;
   si.innerHTML = `${PAPELERA}${n > 1 ? `Borrar ${n} PFG` : "Borrar"}`;
   si.disabled = !n;
   d.returnValue = "";
@@ -628,6 +719,11 @@ async function post(url, cuerpo) {
   } catch { aviso("No se puede conectar con el servidor del dashboard."); }
 }
 document.addEventListener("click", async e => {
+  const leer = e.target.closest("[data-leer]");
+  if (leer && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) {
+    e.preventDefault();
+    return abrirLector(leer.dataset.leer, +leer.dataset.pdf || null);
+  }
   const accion = e.target.closest("[data-ejecutar], [data-detener]");
   if (accion) {
     const id = accion.closest("[data-pfg]").dataset.pfg;
@@ -701,6 +797,279 @@ addEventListener("dragover", e => e.preventDefault());
 addEventListener("drop", e => { e.preventDefault(); arrastres = 0; document.body.classList.remove("arrastrando"); subir(e.dataTransfer.files); });
 addEventListener("beforeprint", () => document.querySelectorAll("details").forEach(d => d.open = true));
 addEventListener("hashchange", () => { pintado = ""; cargar(); scrollTo(0, 0); });
+// ---------- lector de la memoria ----------
+// Vive fuera de #main: el repintado de cada 4 s no toca las páginas ni una nota a medio escribir.
+const TIPOS = {
+  personal: {nombre: "Personal", boton: "Nota personal", color: "warn", pista: "Escribe una nota (opcional)"},
+  agente: {nombre: "Pregunta al agente", boton: "Preguntar al agente", color: "accent", pista: "¿Qué quieres que compruebe el agente?"},
+  preguntas: {nombre: "Para las preguntas", boton: "Para las preguntas", color: "violet", pista: "¿Qué duda debería recoger alguna pregunta?"},
+};
+const colorTipo = t => `--c: var(--${TIPOS[t].color}); --c-soft: var(--${TIPOS[t].color}-soft)`;
+// sucias: notas editadas que el servidor aún no ha confirmado; mandan sobre lo que llegue del servidor.
+const lector = {id: null, paginas: [], palabras: {}, notas: [], sucias: new Map(), esperas: {}, datos: null, activa: null,
+  zoom: 1, actual: 1, destino: 1};
+const ORDEN = (a, b) => a.pdf - b.pdf || (a.palabras?.[0] ?? -1) - (b.palabras?.[0] ?? -1) || a.creada - b.creada;
+const tres = n => String(n).padStart(3, "0");
+const poner = (el, html) => { if (el._html !== html) el.innerHTML = el._html = html; };
+let observador, seleccionada;
+
+async function abrirLector(id, pdf) {
+  if (lector.id === id) return pdf && irA(pdf);
+  cerrarLector();
+  Object.assign(lector, {id, destino: pdf || 1});
+  document.body.classList.add("con-lector");
+  $("#lector").hidden = false;
+  $("#hojas").innerHTML = `<p class="muted">Preparando la memoria…</p>`;
+  pintado = ""; cargar();  // trae las notas de este PFG
+  const r = await fetch(`/pfgs/${id}/paginas/indice.json`).catch(() => null);
+  if (lector.id !== id) return;
+  if (!r?.ok) return $("#hojas").innerHTML = error("No se ha podido preparar la memoria para leerla.");
+  lector.paginas = await r.json();
+  $("#hojas").innerHTML = lector.paginas.map((p, i) =>
+    `<div class="pagina" data-pdf="${i + 1}" style="--w:${p.w};--h:${p.h}"><img alt="" decoding="async"><div class="resaltes"></div><div class="capa"></div></div>`).join("");
+  ajustar();
+  observador = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !e.target.dataset.pintada) { e.target.dataset.pintada = 1; pintarPagina(+e.target.dataset.pdf, e.target); }
+  }), {root: $("#hojas"), rootMargin: "800px 0px"});
+  $("#hojas").querySelectorAll(".pagina").forEach(p => observador.observe(p));
+  irA(lector.destino);
+}
+
+function cerrarLector() {
+  if (!lector.id) return;
+  for (const aid of lector.sucias.keys()) guardarNota(aid);
+  observador?.disconnect();
+  Object.assign(lector, {id: null, paginas: [], palabras: {}, notas: [], sucias: new Map(), datos: null, activa: null});
+  $("#lector").hidden = $("#pop").hidden = true;
+  document.body.classList.remove("con-lector");
+  $("#hojas").innerHTML = $("#lista-notas").innerHTML = "";
+}
+
+// El zoom es la escala de página; la capa de texto va en unidades de la página (cqh) y la sigue sola.
+function ajustar() {
+  const hojas = $("#hojas"), pos = hojas.scrollTop / (hojas.scrollHeight || 1);
+  if (!lector.paginas.length) return;
+  hojas.style.setProperty("--escala", (hojas.clientWidth - 32) / Math.max(...lector.paginas.map(p => p.w)) * lector.zoom);
+  hojas.scrollTop = pos * hojas.scrollHeight;
+}
+new ResizeObserver(ajustar).observe($("#hojas"));
+
+function irA(pdf, y = 0) {
+  lector.destino = pdf = Math.max(1, Math.min(lector.paginas.length || pdf, pdf));
+  const el = $(`#hojas [data-pdf="${pdf}"]`);
+  if (!el) return;
+  // Salto instantáneo: uno suave recorre las páginas intermedias y las manda pintar todas.
+  $("#hojas").scrollTo({top: el.offsetTop - 16 + Math.max(0, y * el.offsetHeight - 120), behavior: "instant"});
+  paginaActual();
+}
+
+function paginaActual() {
+  const hojas = $("#hojas"), y = hojas.scrollTop + hojas.clientHeight / 3;
+  let n = 1;
+  for (const p of hojas.children) { if (p.offsetTop > y) break; n = +p.dataset.pdf || n; }
+  lector.actual = n;
+  const p = lector.paginas[n - 1];
+  $("#donde").textContent = p ? `${p.pag ? `pág. ${p.pag} · ` : ""}PDF ${n}/${lector.paginas.length}` : "";
+}
+
+async function pintarPagina(n, el) {
+  const id = lector.id, r = await fetch(`/pfgs/${id}/paginas/p${tres(n)}.json`).catch(() => null);
+  if (lector.id !== id) return;
+  if (!r?.ok) { el.dataset.error = "No se ha podido preparar esta página."; return; }
+  const ws = lector.palabras[n] = (await r.json()).palabras;
+  el.querySelector("img").src = `/pfgs/${id}/paginas/p${tres(n)}.png`;  // después del JSON: así la página se genera una sola vez
+  const capa = el.querySelector(".capa");
+  capa.innerHTML = ws.map(([x0, y0, , y1, t], i) =>
+    `<span data-i="${i}" style="left:${x0 * 100}%;top:${y0 * 100}%;font-size:${(y1 - y0) * 100}cqh">${h(t)}</span>`).join(" ");
+  const spans = [...capa.children], anchos = spans.map(s => s.offsetWidth), W = capa.clientWidth;  // medir todo antes de escribir
+  spans.forEach((s, i) => anchos[i] && (s.style.transform = `scaleX(${(ws[i][2] - ws[i][0]) * W / anchos[i]})`));
+  pintarResaltes(n);
+}
+
+// Las palabras seguidas de una misma línea se pintan como un solo rectángulo.
+const renglones = (ws, [i, j]) => ws.slice(i, j + 1).reduce((rs, [x0, y0, x1, y1]) => {
+  const r = rs.at(-1);
+  if (r && Math.abs(r[1] - y0) < (y1 - y0) / 2 && x0 >= r[2]) { r[2] = x1; r[3] = Math.max(r[3], y1); } else rs.push([x0, y0, x1, y1]);
+  return rs;
+}, []);
+function pintarResaltes(n) {
+  const el = $(`#hojas [data-pdf="${n}"] .resaltes`), ws = lector.palabras[n];
+  if (!el || !ws) return;
+  poner(el, lector.notas.filter(a => a.pdf === n && a.palabras).map(a => renglones(ws, a.palabras).map(([x0, y0, x1, y1]) =>
+    `<div class="${a.id === lector.activa ? "activa" : ""}" style="${colorTipo(a.tipo)};left:${x0 * 100}%;top:${y0 * 100}%;width:${(x1 - x0) * 100}%;height:${(y1 - y0) * 100}%"></div>`
+  ).join("")).join(""));
+}
+
+function ponerNotas(datos) {
+  lector.datos = datos;
+  const servidor = lista(datos.anotaciones), ids = new Set(servidor.map(n => n.id));
+  lector.notas = [...servidor.map(n => (s => s ? {...n, tipo: s.tipo, nota: s.nota} : n)(lector.sucias.get(n.id))),
+    ...[...lector.sucias.values()].filter(n => !ids.has(n.id))].sort(ORDEN);
+  pintarNotas();
+}
+
+const cabecera = n => `<select aria-label="Tipo de nota">${Object.entries(TIPOS).map(([k, t]) =>
+    `<option value="${k}"${k === n.tipo ? " selected" : ""}>${t.nombre}</option>`).join("")}</select>
+  <button class="pag" type="button" data-ir="${n.id}">${n.pag ? "pág. " + h(n.pag) : "PDF " + n.pdf}</button>
+  <button class="btn enlace" type="button" data-borrar-nota="${n.id}">Borrar</button>`;
+const pie = n => n.tipo === "agente"
+  ? (lista(n.respuesta).length ? `<div class="respuesta"><b>Respuesta del agente${n.pendiente ? " a la versión anterior de la nota" : ""}</b>
+      <ul>${n.respuesta.map(r => `<li>${h(r.texto)} ${pag(lector.id, r)}</li>`).join("")}</ul></div>` : "")
+    + (n.pendiente ? `<span class="estado pendiente">Pendiente de enviar al agente</span>` : "")
+  : n.tipo === "preguntas" ? `<span class="estado">${n.tarde ? "Las preguntas ya están generadas: se tendrá en cuenta si se vuelven a generar."
+    : "Se tendrá en cuenta al generar las preguntas."}</span>` : "";
+function pintarNotas() {
+  const ol = $("#lista-notas"), previas = new Map([...ol.children].map(li => [li.dataset.nota, li]));
+  lector.notas.forEach((n, k) => {
+    let li = previas.get(n.id);
+    previas.delete(n.id);
+    if (!li) {
+      li = document.createElement("li");
+      li.dataset.nota = n.id;
+      li.innerHTML = `<div class="cab"></div><blockquote></blockquote><textarea rows="2" aria-label="Texto de la nota"></textarea><div class="pie"></div>`;
+    }
+    if (ol.children[k] !== li) ol.insertBefore(li, ol.children[k] ?? null);
+    li.className = `nota${n.id === lector.activa ? " activa" : ""}`;
+    li.style.cssText = colorTipo(n.tipo);
+    poner(li.querySelector(".cab"), cabecera(n));
+    poner(li.querySelector("blockquote"), h(n.cita));
+    const t = li.querySelector("textarea");
+    if (t !== document.activeElement && !lector.sucias.has(n.id)) t.value = n.nota;
+    t.placeholder = TIPOS[n.tipo].pista;
+    poner(li.querySelector(".pie"), pie(n));
+  });
+  previas.forEach(li => li.remove());
+  Object.keys(lector.palabras).forEach(n => pintarResaltes(+n));
+  $("[data-ver-notas]").textContent = `Notas · ${lector.notas.length}`;
+  const e = lector.datos?.ejecucion, np = lector.notas.filter(n => n.pendiente).length;
+  poner($("#enviar"), (e && e.estado !== "terminada" ? `<div data-pfg="${lector.id}">${ejecucion(e)}</div>` : "")
+    + (np && e?.estado !== "en_curso" ? `<button class="btn primary" type="button" data-enviar-notas>Enviar ${np} ${np === 1 ? "pregunta" : "preguntas"} al agente con ${h(lector.datos.ejecutor_notas)}</button>` : ""));
+}
+
+function crearNota(tipo, pdf, palabras, foco) {
+  const ws = lector.palabras[pdf] || [];
+  const n = {id: crypto.randomUUID().slice(0, 8), tipo, pdf, palabras, nota: "", pag: lector.paginas[pdf - 1].pag, creada: Date.now() / 1000,
+    cita: palabras ? ws.slice(palabras[0], palabras[1] + 1).map(w => w[4]).join(" ") : ""};  // provisional: el servidor la deriva igual
+  lector.sucias.set(n.id, {...n, v: 1});
+  lector.notas = [...lector.notas, n].sort(ORDEN);
+  lector.activa = n.id;
+  verNotas(true);
+  pintarNotas();
+  guardarNota(n.id);
+  const t = $(`[data-nota="${n.id}"] textarea`);
+  t.scrollIntoView({block: "nearest"});
+  if (foco) t.focus();
+}
+
+function editarNota(aid, cambios, ya) {
+  const n = lector.notas.find(x => x.id === aid);
+  Object.assign(n, cambios);
+  lector.sucias.set(aid, {...n, v: (lector.sucias.get(aid)?.v ?? 0) + 1});
+  clearTimeout(lector.esperas[aid]);
+  if (ya) guardarNota(aid); else lector.esperas[aid] = setTimeout(() => guardarNota(aid), 700);
+}
+
+async function guardarNota(aid) {
+  clearTimeout(lector.esperas[aid]);
+  const s = lector.sucias.get(aid), id = lector.id;
+  if (!s) return;
+  const ok = await post(`/api/pfgs/${id}/anotaciones/${aid}`, {tipo: s.tipo, pdf: s.pdf, palabras: s.palabras, nota: s.nota});
+  if (ok && lector.id === id && lector.sucias.get(aid)?.v === s.v) lector.sucias.delete(aid);
+  pintado = ""; cargar();
+}
+
+async function borrarNota(aid) {
+  clearTimeout(lector.esperas[aid]);
+  lector.sucias.delete(aid);
+  lector.notas = lector.notas.filter(n => n.id !== aid);
+  pintarNotas();
+  if (await post(`/api/pfgs/${lector.id}/anotaciones/${aid}/borrar`)) aviso("Nota borrada.");
+  pintado = ""; cargar();
+}
+
+function activar(aid) {
+  lector.activa = aid;
+  pintarNotas();
+  $(`[data-nota="${aid}"]`)?.scrollIntoView({block: "nearest"});
+}
+
+function verNotas(ver) {
+  $(".lector-cuerpo").classList.toggle("sin-notas", !ver);
+  $("[data-ver-notas]").setAttribute("aria-expanded", ver);
+}
+
+// Selección → rango de palabras [i, j] de una página. El servidor saca de ahí la cita y la página.
+function alSoltar() {
+  const sel = getSelection(), r = sel.rangeCount && !sel.isCollapsed && sel.getRangeAt(0);
+  const nodo = c => (c.nodeType === 1 ? c : c.parentElement).closest(".pagina");
+  const pagina = r && (nodo(r.startContainer) || nodo(r.endContainer));
+  const is = !pagina ? [] : [...pagina.querySelectorAll(".capa span")].filter(s => r.intersectsNode(s)
+    && !(s.contains(r.startContainer) && r.startOffset >= s.textContent.length) && !(s.contains(r.endContainer) && r.endOffset === 0))
+    .map(s => +s.dataset.i);
+  const pop = $("#pop");
+  if (!is.length) return pop.hidden = true;
+  seleccionada = {pdf: +pagina.dataset.pdf, palabras: [is[0], is.at(-1)]};
+  pop.innerHTML = `<button type="button" data-crear="personal" style="${colorTipo("personal")}">Resaltar</button>`
+    + Object.entries(TIPOS).map(([k, t]) => `<button type="button" data-crear="${k}" data-foco style="${colorTipo(k)}">${t.boton}</button>`).join("");
+  pop.hidden = false;
+  const b = r.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(b.left, innerWidth - pop.offsetWidth - 8)) + "px";
+  pop.style.top = (b.bottom + 8 + pop.offsetHeight < innerHeight ? b.bottom + 8 : Math.max(8, b.top - pop.offsetHeight - 8)) + "px";
+}
+$("#hojas").addEventListener("mouseup", () => setTimeout(alSoltar));
+$("#hojas").addEventListener("scroll", () => { $("#pop").hidden = true; paginaActual(); }, {passive: true});
+$("#pop").addEventListener("mousedown", e => e.preventDefault());  // que el clic no deshaga la selección
+$("#pop").addEventListener("click", e => {
+  const b = e.target.closest("[data-crear]");
+  if (!b || !seleccionada) return;
+  crearNota(b.dataset.crear, seleccionada.pdf, seleccionada.palabras, "foco" in b.dataset);
+  getSelection().removeAllRanges();
+  $("#pop").hidden = true;
+});
+$("#lector").addEventListener("click", async e => {
+  const t = e.target.closest("[data-cerrar-lector], [data-mover], [data-zoom], [data-nota-pagina], [data-ver-notas], [data-ir], [data-borrar-nota], [data-enviar-notas], .capa span");
+  if (!t) return;
+  const d = t.dataset;
+  if ("cerrarLector" in d) return cerrarLector();
+  if (d.mover) return irA(lector.actual + +d.mover);
+  if (d.zoom) { lector.zoom = Math.max(.5, Math.min(3, lector.zoom * (d.zoom > 0 ? 1.2 : 1 / 1.2))); return ajustar(); }
+  if ("notaPagina" in d) return crearNota("personal", lector.actual, null, true);
+  if ("verNotas" in d) return verNotas($(".lector-cuerpo").classList.contains("sin-notas"));
+  if (d.borrarNota) return borrarNota(d.borrarNota);
+  if (d.ir) {
+    const n = lector.notas.find(x => x.id === d.ir);
+    activar(n.id);
+    return irA(n.pdf, n.palabras ? lector.palabras[n.pdf]?.[n.palabras[0]]?.[1] ?? 0 : 0);
+  }
+  if ("enviarNotas" in d) {
+    t.disabled = true;
+    await Promise.all([...lector.sucias.keys()].map(guardarNota));
+    if (await post(`/api/pfgs/${lector.id}/ejecutar`, {fase: "anotaciones-pfg"})) aviso("Preguntas enviadas al agente.");
+    pintado = ""; return cargar();
+  }
+  if (getSelection().isCollapsed) {  // clic en un resaltado: su nota
+    const i = +d.i, pdf = +t.closest(".pagina").dataset.pdf;
+    const n = lector.notas.find(a => a.pdf === pdf && a.palabras && a.palabras[0] <= i && i <= a.palabras[1]);
+    if (n) activar(n.id);
+  }
+});
+$("#lector").addEventListener("input", e => {
+  if (e.target.matches("textarea")) editarNota(e.target.closest("[data-nota]").dataset.nota, {nota: e.target.value});
+});
+$("#lector").addEventListener("change", e => {
+  const aid = e.target.closest("[data-nota]")?.dataset.nota;
+  if (!aid) return;
+  if (e.target.matches("select")) { editarNota(aid, {tipo: e.target.value}, true); pintarNotas(); }
+  else guardarNota(aid);  // el textarea pierde el foco: no esperes al temporizador
+});
+document.addEventListener("keydown", e => {
+  if (!lector.id || $("#confirmar").open || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("textarea, input, select")) return;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); irA(lector.actual + (e.key === "ArrowRight" ? 1 : -1)); }
+  if (e.key === "Escape" && $("#pop").hidden) cerrarLector();
+  else if (e.key === "Escape") $("#pop").hidden = true;
+});
+document.addEventListener("mousedown", e => { if (!e.target.closest("#pop, #hojas")) $("#pop").hidden = true; });
+
 setInterval(() => document.hidden || cargar(), 4000);
 cargar();
 </script>

@@ -20,6 +20,8 @@ Lee `analisis.json` y los `secciones/NN.json`. Abre tramos de `secciones/NN.txt`
 
 Las buenas preguntas salen de las **tensiones** del trabajo: las que han marcado los lectores, las debilidades y la tabla de coherencia del análisis, y lo que veas con las lentes de `.agents/skills/leer-pfg/lentes.md`. Las lentes dicen dónde mirar, no qué cubrir: no hace falta una pregunta por lente.
 
+**Dudas del tribunal.** Si existe `anotaciones.json`, lee las notas con `"tipo": "preguntas"`: son dudas que el docente ha anotado al leer la memoria, con su `cita`, su `pdf` y su `pag`. Compruébalas en el texto. Las que sigan en pie son candidatas a pregunta, ancladas a su página: no las copies, reescríbelas para que pasen los filtros. Ignora las notas de otros tipos y no abras `notas-personales.json`, que es privado.
+
 **Cuántas**: las que el trabajo merezca, normalmente entre 8 y 15. No hay cupo por tema. Si el trabajo flojea sobre todo en un punto, que la mayoría de las preguntas vayan ahí.
 
 **Cada pregunta tiene que pasar estos filtros.** Si no los pasa, reescríbela o descártala.
