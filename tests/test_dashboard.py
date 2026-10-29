@@ -2,6 +2,7 @@
 """Self-check de la ejecución de fases del dashboard con un agente falso. Uso: uv run tests/test_dashboard.py"""
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -85,29 +86,61 @@ with tempfile.TemporaryDirectory() as tmp:
     server.detener(server.EJECUCIONES["demo"])
     esperar("detenida")
 
-    agente.write_text('#!/bin/sh\ncase "$2" in *salir-mal*) exit 3;; *dormir*) sleep 30;; '
-                      '*romper*) echo "{\\"titulo\\": \\"T\\"}" > "$PFG/analisis.json"; exit 3;; '
-                      '*leer-pfg*encadenar*) sleep 0.5; echo "{\\"titulo\\": \\"T\\"}" > "$PFG/analisis.json";; '
-                      '*preguntas-pfg*encadenar*) echo "[]" > "$PFG/preguntas.json"; echo "{}" > "$PFG/clasificacion.json";; '
+    agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
+                      'case "$2" in *dormir*|*"PFG lenta"*) sleep 30;; '
+                      '*"PFG rota"*) echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json"; exit 3;; '
+                      '*leer-pfg*) sleep 0.5; echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json";; '
+                      '*preguntas-pfg*) sleep 0.3; echo "[]" > "$P/preguntas.json"; echo "{}" > "$P/clasificacion.json";; '
                       'esac\necho "hecho: $2"\n')
-    server.PROMPT = "{comando} encadenar"
-    server.lanzar(d, seguir=True)
-    assert server.resumen(d)["ejecucion"]["despues"] == "Preguntas para la defensa"
+    server.os.environ["PFGS"] = str(server.PFGS)
+    server.PROMPT = "{comando} cola"
+    otra, rota, lenta = (server.PFGS / n for n in ["otra", "rota", "lenta"])
+    for p in (otra, rota, lenta):
+        p.mkdir()
+        (p / "memoria.pdf").write_bytes(b"%PDF")
+    threading.Thread(target=server.preparar_cola, daemon=True).start()
+
+    def preparar(*dirs, hasta):
+        for p in dirs:
+            server.encolar(p)
+        vistos = []
+        for _ in range(100):
+            r = {p.name: server.resumen(p) for p in dirs}
+            en_curso = [k for k, v in r.items() if (v["ejecucion"] or {}).get("estado") == "en_curso"]
+            assert len(en_curso) < 2, f"de uno en uno: {en_curso}"
+            vistos.append((en_curso, r))
+            if hasta(r):
+                return vistos
+            time.sleep(0.05)
+        raise AssertionError(f"la cola no terminó: {r}")
+
+    vistos = preparar(d, otra, hasta=lambda r: all(v["estado"] == "clasificadas" for v in r.values()))
+    leyendo = [r for en_curso, r in vistos if en_curso == ["demo"] and r["demo"]["ejecucion"]["fase"] == "Lectura de la memoria"]
+    assert leyendo, "se vio leer a demo"
+    assert all(r["otra"]["cola"] == 1 and r["otra"]["ejecucion"] is None for r in leyendo), "otra espera su turno"
+    assert leyendo[0]["demo"]["ejecucion"]["despues"] == "Preguntas para la defensa"
+    assert server.EJECUCIONES["otra"]["fase"] == "preguntas-pfg" and server.resumen(otra)["cola"] is None
+    for p in (d, otra):
+        for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
+            (p / f).unlink()
+
+    preparar(rota, otra, hasta=lambda r: r["otra"]["estado"] == "clasificadas")
+    assert server.EJECUCIONES["rota"]["fase"] == "leer-pfg", "una fase fallida no lanza la siguiente"
+    assert server.resumen(rota)["ejecucion"]["estado"] == "fallida"
+    for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
+        (otra / f).unlink()
+
+    preparar(lenta, otra, hasta=lambda r: (r["lenta"]["ejecucion"] or {}).get("estado") == "en_curso" and r["otra"]["cola"])
+    server.borrar(otra)
+    assert "otra" not in server.COLA and not otra.exists(), "borrar saca el PFG de la cola"
+    server.detener(server.EJECUCIONES["lenta"])
     for _ in range(50):
-        if server.resumen(d)["estado"] == "clasificadas":
+        if server.resumen(lenta)["ejecucion"]["estado"] == "detenida":
             break
         time.sleep(0.1)
-    assert esperar("terminada")["fase"] == "Preguntas para la defensa", "la lectura lanza sola las preguntas"
-    assert server.resumen(d)["estado"] == "clasificadas"
-    for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
-        (d / f).unlink()
-
-    server.PROMPT = "{comando} romper"
-    server.lanzar(d, seguir=True)
-    esperar("fallida")
-    time.sleep(0.3)
-    assert server.EJECUCIONES["demo"]["fase"] == "leer-pfg", "una fase fallida no encadena la siguiente"
-    (d / "analisis.json").unlink()
+    server.borrar(lenta)
+    server.borrar(rota)
+    assert not server.COLA
 
     (d / "clasificacion.json").write_text("{}")
     assert "todas las fases" in falla(server.lanzar, d)

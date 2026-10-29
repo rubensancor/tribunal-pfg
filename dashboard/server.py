@@ -78,6 +78,8 @@ HARNESSES = {
 
 EJECUCIONES = {}  # id -> ejecución en memoria; se pierde al parar el servidor, que además detiene las que sigan en curso
 CERROJO = threading.Lock()
+COLA = []  # ids de PFG subidos con «Leer y preguntar al cargar», preparados de uno en uno por preparar_cola
+HAY_COLA = threading.Condition(CERROJO)
 
 
 def leer(ruta):
@@ -95,6 +97,7 @@ def lista(x):
 
 def resumen(d):
     """Estado deducido de los archivos que existen; nadie escribe un campo de estado."""
+    cola = COLA.copy()  # sin el cerrojo: lanzar llama a resumen con él cogido
     indice = lista(leer(d / "secciones" / "indice.json"))
     leidas = sum((d / "secciones" / f"{s['n']:02d}.json").exists() for s in indice)
     analisis = leer(d / "analisis.json") or {}
@@ -114,7 +117,7 @@ def resumen(d):
             "preguntas": len(preguntas), "paso": paso,
             "comando": f"usa la skill {paso} con el PFG {d.name}" if paso else None,
             "ejecutor": HARNESSES[config_ejecucion()[paso]["harness"]]["nombre"] if paso else None,
-            "ejecucion": ejecucion(d.name, paso),
+            "ejecucion": ejecucion(d.name, paso), "cola": cola.index(d.name) + 1 if d.name in cola else None,
             "modificado": max(p.stat().st_mtime for p in d.rglob("*"))}
 
 
@@ -188,8 +191,13 @@ def ejecucion(pfg_id, paso, con_log=False):
     return r
 
 
+def binario(harness):
+    if not shutil.which(b := HARNESSES[harness]["bin"]):
+        raise ValueError(f"no se encuentra «{b}» en el PATH")
+
+
 def lanzar(d, seguir=False):
-    """Lanza el agente configurado para el siguiente paso del PFG y, con seguir, los que vengan. ValueError si no se puede."""
+    """Lanza el agente configurado para el siguiente paso del PFG y devuelve su ejecución. ValueError si no se puede."""
     with CERROJO:
         if not (d / "memoria.pdf").exists():
             raise ValueError("este PFG ya no existe")
@@ -199,9 +207,8 @@ def lanzar(d, seguir=False):
         if not r["paso"]:
             raise ValueError("este PFG ya tiene todas las fases hechas")
         cfg = config_ejecucion()[r["paso"]]
+        binario(cfg["harness"])
         argv = comando_agente(cfg["harness"], cfg["modelo"], cfg["esfuerzo"], r["comando"])
-        if not shutil.which(argv[0]):
-            raise ValueError(f"no se encuentra «{argv[0]}» en el PATH")
         log = d / "ejecuciones" / f"{time.strftime('%Y%m%d-%H%M%S')}-{r['paso']}.log"
         log.parent.mkdir(exist_ok=True)
         with open(log, "w", encoding="utf-8") as f:
@@ -213,19 +220,31 @@ def lanzar(d, seguir=False):
         EJECUCIONES[d.name] = {"fase": r["paso"], "harness": cfg["harness"], "modelo": cfg["modelo"],
                                "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc,
                                "seguir": seguir}
-        if seguir:
-            threading.Thread(target=encadenar, args=(d, EJECUCIONES[d.name]), daemon=True).start()
+        return EJECUCIONES[d.name]
 
 
-def encadenar(d, e):
-    """Si la ejecución e termina bien y el PFG avanza de fase, lanza la siguiente."""
-    if e["proc"].wait() != 0:
-        return
-    try:
-        if resumen(d)["paso"] not in (None, e["fase"]):
-            lanzar(d, seguir=True)
-    except (ValueError, OSError):
-        pass  # el PFG se borró o alguien lanzó la fase a mano: la tarjeta ofrece el botón de siempre
+def encolar(d):
+    binario(config_ejecucion()["leer-pfg"]["harness"])
+    with HAY_COLA:
+        COLA.append(d.name)
+        HAY_COLA.notify()
+
+
+def preparar_cola():
+    """Lee y pregunta los PFG de la cola de uno en uno. Una fase fallida, detenida o sin avance pasa al siguiente."""
+    while True:
+        with HAY_COLA:
+            HAY_COLA.wait_for(lambda: COLA)
+            d = PFGS / COLA.pop(0)
+        fase = None
+        try:
+            while resumen(d)["paso"] not in (None, fase):
+                e = lanzar(d, seguir=True)
+                fase = e["fase"]
+                if e["proc"].wait() != 0:
+                    break
+        except (ValueError, OSError):
+            pass  # se borró o alguien lanzó la fase a mano mientras esperaba
 
 
 def borrar(d):
@@ -234,6 +253,8 @@ def borrar(d):
         if (e := EJECUCIONES.get(d.name)) and e["proc"].poll() is None:
             raise ValueError("detén la ejecución en curso antes de borrar este PFG")
         EJECUCIONES.pop(d.name, None)
+        if d.name in COLA:
+            COLA.remove(d.name)
         shutil.rmtree(d)
 
 
@@ -358,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
         (d / "memoria.pdf").write_bytes(datos)
         if query.get("preparar") == ["1"]:
             try:
-                lanzar(d, seguir=True)
+                encolar(d)
             except ValueError as e:
                 return self.responder(201, {"id": d.name, "error": str(e)})  # el PDF sí se guardó
         self.responder(201, {"id": d.name})
@@ -377,11 +398,13 @@ def main():
     print(f"Dashboard del tribunal en {url} (Ctrl+C para parar)", flush=True)
     webbrowser.open(url)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    threading.Thread(target=preparar_cola, daemon=True).start()
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        CERROJO.acquire()  # ninguna fase puede empezar mientras se cierra
         for e in EJECUCIONES.values():  # sin el servidor nadie vería ni podría parar esos agentes
             detener(e)
 
