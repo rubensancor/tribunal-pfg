@@ -181,7 +181,7 @@ def ejecucion(pfg_id, paso, con_log=False):
     codigo = e["proc"].poll()
     estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
               else "sin_avance" if paso == e["fase"] else "terminada")
-    r = {"fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
+    r = {"paso": e["fase"], "fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
          "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo,
          "despues": FASES["preguntas-pfg"] if e["seguir"] and e["fase"] == "leer-pfg" else None}
     if con_log:
