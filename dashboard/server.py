@@ -179,7 +179,8 @@ def ejecucion(pfg_id, paso, con_log=False):
     estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
               else "sin_avance" if paso == e["fase"] else "terminada")
     r = {"fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
-         "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo}
+         "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo,
+         "despues": FASES["preguntas-pfg"] if e["seguir"] and e["fase"] == "leer-pfg" else None}
     if con_log:
         with open(e["log"], "rb") as f:
             f.seek(max(f.seek(0, 2) - 6000, 0))
@@ -187,9 +188,11 @@ def ejecucion(pfg_id, paso, con_log=False):
     return r
 
 
-def lanzar(d):
-    """Lanza el agente configurado para el siguiente paso del PFG. ValueError si no se puede."""
+def lanzar(d, seguir=False):
+    """Lanza el agente configurado para el siguiente paso del PFG y, con seguir, los que vengan. ValueError si no se puede."""
     with CERROJO:
+        if not (d / "memoria.pdf").exists():
+            raise ValueError("este PFG ya no existe")
         if (e := EJECUCIONES.get(d.name)) and e["proc"].poll() is None:
             raise ValueError("ya hay una ejecución en curso para este PFG")
         r = resumen(d)
@@ -208,7 +211,21 @@ def lanzar(d):
             proc = subprocess.Popen(argv, cwd=RAIZ, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT,
                                     start_new_session=True)
         EJECUCIONES[d.name] = {"fase": r["paso"], "harness": cfg["harness"], "modelo": cfg["modelo"],
-                               "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc}
+                               "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc,
+                               "seguir": seguir}
+        if seguir:
+            threading.Thread(target=encadenar, args=(d, EJECUCIONES[d.name]), daemon=True).start()
+
+
+def encadenar(d, e):
+    """Si la ejecución e termina bien y el PFG avanza de fase, lanza la siguiente."""
+    if e["proc"].wait() != 0:
+        return
+    try:
+        if resumen(d)["paso"] not in (None, e["fase"]):
+            lanzar(d, seguir=True)
+    except (ValueError, OSError):
+        pass  # el PFG se borró o alguien lanzó la fase a mano: la tarjeta ofrece el botón de siempre
 
 
 def borrar(d):
@@ -336,8 +353,14 @@ class Handler(BaseHTTPRequestHandler):
         datos = self.rfile.read(n)
         if not datos.startswith(b"%PDF"):
             return self.responder(400, {"error": "no es un PDF"})
-        d = nuevo_dir(parse_qs(url.query).get("nombre", ["pfg.pdf"])[0])
+        query = parse_qs(url.query)
+        d = nuevo_dir(query.get("nombre", ["pfg.pdf"])[0])
         (d / "memoria.pdf").write_bytes(datos)
+        if query.get("preparar") == ["1"]:
+            try:
+                lanzar(d, seguir=True)
+            except ValueError as e:
+                return self.responder(201, {"id": d.name, "error": str(e)})  # el PDF sí se guardó
         self.responder(201, {"id": d.name})
 
     def log_message(self, *args):
