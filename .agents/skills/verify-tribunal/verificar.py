@@ -121,7 +121,7 @@ def doctor():
         check(en_api == en_disco, f"la API sirve la carpeta desechable {est['pfgs']} ({en_api})")
     except OSError as e:
         check(False, f"el servidor responde ({e})")
-    desfase = [f for f in COPIA if not filecmp.cmp(REPO / f, Path(est["app"]) / f, shallow=False)]
+    desfase = [f for f in COPIA if not (Path(est["app"]) / f).exists() or not filecmp.cmp(REPO / f, Path(est["app"]) / f, shallow=False)]
     check(not desfase, f"la copia coincide con el checkout{f' (cambiado: {desfase}; vuelve a arrancar)' if desfase else ''}")
     nav = rd / "navegador.log"
     print(f"info  apertura de navegador capturada: {nav.read_text().strip() if nav.exists() else 'ninguna'}")
