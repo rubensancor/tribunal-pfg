@@ -43,6 +43,16 @@ assert server.comando_agente("pi", "", "low", "x")[-2:] == ["--thinking", "low"]
 assert server.comando_agente("agy", "m", "", "x")[-2:] == ["--model", "m"]
 assert server.comando_agente("agy", "m", "max", "x")[-4:] == ["--model", "m", "--effort", "max"]
 
+assert server.validar_config({"leer-pfg": {"harness": "opencode", "modelo": "opencode/beam-free", "esfuerzo": "xhigh"}})["leer-pfg"]["esfuerzo"] == "xhigh"
+assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "opencode/big-pickle"}})
+assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "anthropic/claude-opus-5-5"}})
+assert "no admite el esfuerzo" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "esfuerzo": "medium"}})
+argv = server.comando_agente("opencode", "", "", "x")
+assert argv[:4] == ["opencode", "run", "--standalone", "--auto"] and argv[argv.index("-m") + 1] == "opencode/glm-5.3-flash-free"
+assert server.comando_agente("opencode", "opencode/beam-free", "low", "x")[-2] == "opencode/beam-free#low"
+permisos = server.json.loads(server.HARNESSES["opencode"]["env"]["OPENCODE_CONFIG_CONTENT"])["permission"]
+assert permisos["bash"]["*"] == "deny" and permisos["bash"]["uv run scripts/pfg.py *"] == "allow" and permisos["execute"] == "deny"
+
 assert server.origen_local("127.0.0.1:8765", None, 8765)
 assert server.origen_local("localhost:8765", "http://localhost:8765", 8765)
 assert not server.origen_local("127.0.0.1:8765", "https://evil.example", 8765), "CSRF desde otra web"

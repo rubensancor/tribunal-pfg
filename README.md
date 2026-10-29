@@ -7,12 +7,12 @@ Prepara las defensas de Proyecto Fin de Grado:
 - La skill **`preguntas-pfg`** genera preguntas para la defensa y después las clasifica por categorías.
 - Un **lector** en el dashboard para leer la memoria y anotarla. La skill **`anotaciones-pfg`** responde las notas que dirijas al agente.
 
-Funciona con Claude Code, Codex, Pi y Antigravity: las skills están en `.agents/skills/`. La IA prepara y el tribunal juzga: el sistema no pone notas.
+Funciona con Claude Code, Codex, Pi, Antigravity y OpenCode: las skills están en `.agents/skills/`. La IA prepara y el tribunal juzga: el sistema no pone notas.
 
 ## Requisitos
 
 - [uv](https://docs.astral.sh/uv/), que se encarga de Python y de la única dependencia, pymupdf.
-- Uno de los agentes: Claude Code, Codex, Pi (con [pi-subagents](https://github.com/tintinweb/pi-subagents) para que los lectores usen un modelo barato) o Antigravity.
+- Uno de los agentes: Claude Code, Codex, Pi (con [pi-subagents](https://github.com/tintinweb/pi-subagents) para que los lectores usen un modelo barato), Antigravity u OpenCode.
 
 ## Uso
 
@@ -52,8 +52,11 @@ En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard la
 | Claude Code | `claude -p … --permission-mode dontAsk` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`; el resto se deniega |
 | Antigravity | `agy -p … --mode accept-edits` | los de tu `settings.json` de agy: añade `"command(uv run scripts/pfg.py)"` y `"command(python3 -m json.tool)"` a `permissions.allow`, o terminará sin hacer nada |
 | Pi | `pi -p … --no-session --approve` | ninguno: puede ejecutar cualquier comando |
+| OpenCode | `opencode run --standalone --auto -m <modelo>#<esfuerzo>` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`, sin web ni archivos fuera del proyecto; se fijan en `OPENCODE_CONFIG_CONTENT` |
 
 Las memorias son texto ajeno que el agente lee: con Pi, una instrucción escondida en un PDF podría ejecutar comandos. Para memorias que no conoces, prefiere Claude Code.
+
+OpenCode solo admite los modelos gratuitos de OpenCode Zen que no entrenan con lo que reciben: `opencode/glm-5.3-flash-free` (el de por defecto), `opencode/deepseek-v4.1-flash-free` y `opencode/beam-free`. Los demás gratuitos pueden usar los datos para mejorar el modelo o piden no enviarles datos personales ([condiciones de Zen](https://opencode.ai/docs/zen/)).
 
 ## Modelos baratos por harness
 
@@ -62,6 +65,7 @@ Las memorias son texto ajeno que el agente lee: con Pi, una instrucción escondi
 | Claude Code | `.agents/agents/*.md` (`model: sonnet` / `haiku`), visible a través de `.claude/agents` |
 | Pi + pi-subagents | los mismos `.agents/agents/*.md` |
 | Codex | `.codex/agents/*.toml` (`model = "gpt-6-luna"`) |
+| OpenCode | `.opencode/agents/*.md`: heredan el modelo gratuito de la sesión |
 | Antigravity | sin subagentes: el agente principal lee las secciones una a una |
 
 ## Categorías
