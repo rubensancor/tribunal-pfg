@@ -54,12 +54,24 @@ h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.01
 .card .abajo { margin-top: auto; display: grid; gap: 10px; padding-top: 4px; }
 .card .pie { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
 .card .pie .ir { position: relative; z-index: 1; margin-left: auto; font-weight: 550; text-decoration: none; }
-.card .marca-sel { display: flex; align-items: center; gap: 8px; }
-.card .marca-sel input { position: relative; z-index: 1; margin: 0; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
-.card:has([data-sel]:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.seleccion { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: -4px 0 14px; padding: 8px 14px; border-radius: 8px; background: var(--accent-soft); }
-.seleccion[hidden] { display: none; }
-.seleccion .btn.peligro { margin-left: auto; }
+.card .marca-sel { display: flex; align-items: center; gap: 6px; }
+.card .sel { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; margin: -6px 0 -6px -7px; border-radius: 6px; cursor: pointer; }
+.card .sel:hover { background: var(--accent-soft); }
+.card .sel input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.card:has([data-sel]:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--panel)); box-shadow: 0 0 0 1px var(--accent); }
+.card.saliendo { opacity: 0; transform: scale(.96); transition: opacity .18s ease-out, transform .18s ease-out; }
+#seleccion { --x: -50%; position: fixed; z-index: 6; left: 50%; bottom: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+  max-width: calc(100% - 32px); padding: 8px 8px 8px 18px; border-radius: 12px; background: var(--ink); color: var(--bg);
+  box-shadow: 0 10px 30px rgb(0 0 0 / .22), 0 2px 6px rgb(0 0 0 / .12);
+  transform: translate(var(--x), calc(100% + 28px)); visibility: hidden; transition: transform .32s cubic-bezier(.16, 1, .3, 1), visibility 0s .32s; }
+#seleccion.visible { transform: translate(var(--x), 0); visibility: visible; transition: transform .32s cubic-bezier(.16, 1, .3, 1); }
+#seleccion .cuenta { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#seleccion .btn.enlace { color: color-mix(in srgb, var(--bg) 78%, var(--ink)); font-size: 14px; }
+#seleccion .btn.enlace:hover { color: var(--bg); }
+#seleccion :focus-visible { outline-color: var(--bg); }
+#seleccion .btn.borrar { margin-left: auto; }
+body:has(#seleccion.visible) #aviso { bottom: 88px; }
+body:has(#seleccion.visible) #main { padding-bottom: 96px; }
 
 .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 99px; background: var(--line); color: var(--muted); }
 .badge.leyendo { background: var(--warn-soft); color: var(--warn); }
@@ -77,6 +89,31 @@ h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.01
 .accion .botones { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .btn.peligro { color: var(--bad); }
 .btn.peligro:hover { border-color: var(--bad); }
+.btn.borrar { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.borrar:hover { background: color-mix(in srgb, var(--bad) 86%, #000); }
+[data-tema="noche"] .btn.borrar { color: #2b0b08; }
+.btn.borrar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+#confirmar { width: min(480px, calc(100% - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink);
+  box-shadow: 0 24px 60px rgb(0 0 0 / .28), 0 4px 12px rgb(0 0 0 / .1); }
+#confirmar[open] { animation: entra .22s cubic-bezier(.16, 1, .3, 1); }
+#confirmar::backdrop { background: rgb(12 12 16 / .45); }
+#confirmar form { display: grid; gap: 14px; padding: 22px 22px 18px; }
+#confirmar h2 { margin: 0; font-size: 18px; line-height: 1.3; text-wrap: balance; }
+#confirmar p { margin: 0; font-size: 14px; }
+#confirmar ul { list-style: none; margin: 0; padding: 0; max-height: 40vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+#confirmar li { display: grid; gap: 1px; padding: 9px 12px; }
+#confirmar li + li { border-top: 1px solid var(--line); }
+#confirmar li .t { font-weight: 550; }
+#confirmar li .d { font-size: 13px; color: var(--muted); }
+#confirmar li.queda { background: var(--warn-soft); }
+#confirmar li.queda .d { color: var(--warn); }
+#confirmar .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+@keyframes entra { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  #seleccion, #seleccion.visible, .card.saliendo { transition: none; }
+  #confirmar[open] { animation: none; }
+}
 .btn.enlace { border: 0; background: none; padding: 2px 0; color: var(--accent); font-size: 13px; }
 .btn.enlace:hover { text-decoration: underline; text-underline-offset: 3px; }
 .accion p { margin: 0; font-size: 13px; }
@@ -173,6 +210,11 @@ body.arrastrando #suelta { display: grid; }
   .det-head { flex-direction: column; }
   .q dl { grid-template-columns: 1fr; }
   .sec .cuerpo { padding-left: 16px; }
+  #seleccion { --x: 0; left: 16px; right: 16px; max-width: none; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 10px 10px 10px 16px; }
+  #seleccion > :nth-child(even) { justify-self: end; }
+  #seleccion .btn.borrar { grid-column: 2; margin: 0; }
+  body:has(#seleccion.visible) #aviso { bottom: 124px; }
+  body:has(#seleccion.visible) #main { padding-bottom: 132px; }
 }
 @media print {
   body { background: #fff; color: #000; font-size: 12pt; }
@@ -212,6 +254,15 @@ aplicarTema();
 <main class="wrap" id="main" aria-live="polite"></main>
 <div id="suelta">Suelta los PDF para cargarlos</div>
 <div id="aviso" role="status"></div>
+<div id="seleccion" role="region" aria-label="Selección"></div>
+<dialog id="confirmar" aria-labelledby="confirmar-titulo" aria-describedby="confirmar-nota">
+  <form method="dialog">
+    <h2 id="confirmar-titulo"></h2>
+    <ul></ul>
+    <p class="muted" id="confirmar-nota"></p>
+    <div class="botones"><button class="btn" value="no" autofocus>Cancelar</button><button class="btn borrar" value="si"></button></div>
+  </form>
+</dialog>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -255,12 +306,18 @@ const progreso = p => p.leidas < p.secciones
 
 // ---------- vistas ----------
 const seleccion = new Set();  // ids marcados en la lista; las casillas se repintan cada 4 s
-const barraSeleccion = total => `<div class="seleccion" id="seleccion"${seleccion.size ? "" : " hidden"}>
-    <span><b>${seleccion.size}</b> ${seleccion.size === 1 ? "seleccionado" : "seleccionados"}</span>
-    ${seleccion.size < total ? `<button class="btn enlace" type="button" data-sel-todos>Seleccionar todos</button>` : ""}
+const PAPELERA = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>`;
+const datosBorrado = p => `data-titulo="${h(titulo(p))}" data-detalle="${h([ESTADOS[p.estado], p.estudiante].filter(Boolean).join(" · "))}"${
+  p.ejecucion?.estado === "en_curso" ? " data-en-curso" : ""}`;
+function repintarSeleccion() {
+  const n = seleccion.size, total = document.querySelectorAll("[data-sel]").length;
+  $("#seleccion").classList.toggle("visible", n > 0 && total > 0);
+  if (!n) return;  // conserva el contenido mientras la barra sale
+  $("#seleccion").innerHTML = `<span class="cuenta"><b>${n}</b> ${n === 1 ? "seleccionado" : "seleccionados"}</span>
+    ${n < total ? `<button class="btn enlace" type="button" data-sel-todos>Seleccionar todos</button>` : ""}
     <button class="btn enlace" type="button" data-sel-ninguno>Quitar selección</button>
-    <button class="btn peligro" type="button" data-borrar-sel>Borrar seleccionados</button></div>`;
-const repintarSeleccion = () => $("#seleccion").outerHTML = barraSeleccion(document.querySelectorAll("[data-sel]").length);
+    <button class="btn borrar" type="button" data-borrar-sel>${PAPELERA}Borrar seleccionados</button>`;
+}
 
 function rejilla(pfgs) {
   for (const id of seleccion) if (!pfgs.some(p => p.id === id)) seleccion.delete(id);
@@ -272,10 +329,9 @@ function rejilla(pfgs) {
   const partes = [[n(["pendiente", "leyendo"]), "por leer"], [n(["leido", "preguntas"]), "en preparación"],
     [listos, listos === 1 ? "listo para la defensa" : "listos para la defensa"]].filter(([k]) => k);
   return `<p class="resumen"><b>${pfgs.length}</b> PFG ${pfgs.length === 1 ? "cargado" : "cargados"}: ${partes.map(([k, t]) => `<b>${k}</b> ${t}`).join(" · ")}</p>
-    ${barraSeleccion(pfgs.length)}
     <div class="grid">${pfgs.map(p => `
-      <article class="card">
-        <div class="meta"><span class="marca-sel"><input type="checkbox" data-sel="${p.id}" data-titulo="${h(titulo(p))}" aria-label="Seleccionar ${h(titulo(p))}"${seleccion.has(p.id) ? " checked" : ""}>
+      <article class="card" style="view-transition-name: pfg-${p.id}">
+        <div class="meta"><span class="marca-sel"><label class="sel"><input type="checkbox" data-sel="${p.id}" ${datosBorrado(p)} aria-label="Seleccionar ${h(titulo(p))}"${seleccion.has(p.id) ? " checked" : ""}></label>
           <span class="badge ${p.estado}">${ESTADOS[p.estado]}</span></span><span class="muted">${fecha(p.modificado)}</span></div>
         <h2><a href="#/${p.id}">${h(titulo(p))}</a></h2>
         ${p.estudiante ? `<span class="muted">${h(p.estudiante)}</span>` : ""}
@@ -295,7 +351,7 @@ function detalle(p, pestana, cat) {
     <div class="det-head">
       <div><h1>${h(titulo(p))}</h1><p class="muted"><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span> ${sub}</p></div>
       <div class="botones"><a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener">Abrir PDF</a>
-        <button class="btn peligro" type="button" data-borrar="${p.id}" data-titulo="${h(titulo(p))}">Borrar</button></div>
+        <button class="btn peligro" type="button" data-borrar="${p.id}" ${datosBorrado(p)}>Borrar</button></div>
     </div>
     ${p.estado === "leyendo" ? progreso(p) : ""}
     ${siguiente(p) && `<div class="next"><b>Siguiente paso</b>${siguiente(p, true)}</div>`}
@@ -415,23 +471,45 @@ async function cargar() {
         Si acabas de actualizar el dashboard, reinicia el servidor (Ctrl+C y <code>uv run dashboard/server.py</code>).</p><p><a href="#/">Volver</a></p>`)
     : ajustes ? vistaAjustes(JSON.parse(txt)) : id ? detalle(JSON.parse(txt), pestana, cat) : rejilla(JSON.parse(txt));
   abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
+  repintarSeleccion();
+}
+
+// Resuelve con los elementos que se pueden borrar, o [] si se cancela. Los que tienen una ejecución en curso se quedan.
+function confirmarBorrado(items) {
+  const d = $("#confirmar"), si = d.querySelector('[value="si"]');
+  const borrables = items.filter(i => !("enCurso" in i.dataset)), n = borrables.length;
+  $("#confirmar-titulo").textContent = !n ? "Ahora no se puede borrar" : items.length === 1 ? "¿Borrar este PFG?"
+    : n < items.length ? `¿Borrar ${n} de ${items.length} PFG?` : `¿Borrar ${n} PFG?`;
+  d.querySelector("ul").innerHTML = items.map(i => "enCurso" in i.dataset
+    ? `<li class="queda"><span class="t">${h(i.dataset.titulo)}</span><span class="d">Tiene una ejecución en curso: no se borrará</span></li>`
+    : `<li><span class="t">${h(i.dataset.titulo)}</span><span class="d">${h(i.dataset.detalle)}</span></li>`).join("");
+  $("#confirmar-nota").textContent = !n ? "Detén la ejecución y vuelve a intentarlo."
+    : `${n === 1 ? "Se borran el PDF y todo lo generado a partir de él" : "Se borran los PDF y todo lo generado a partir de ellos"}: resúmenes, fichas, preguntas y registros. No se puede deshacer.`;
+  si.innerHTML = `${PAPELERA}${n > 1 ? `Borrar ${n} PFG` : "Borrar"}`;
+  si.disabled = !n;
+  d.returnValue = "";
+  d.showModal();
+  return new Promise(fin => d.addEventListener("close", () => fin(d.returnValue === "si" ? borrables : []), {once: true}));
 }
 
 async function borrarSeleccion() {
   const marcadas = [...document.querySelectorAll("[data-sel]:checked")];
-  if (!marcadas.length || !confirm(`¿Borrar ${marcadas.length} PFG?\n\n${marcadas.map(c => `· ${c.dataset.titulo}`).join("\n")}\n\n`
-    + "Se borran sus PDF y todo lo generado a partir de ellos: resúmenes, fichas, preguntas y registros. No se puede deshacer.")) return;
+  const aBorrar = await confirmarBorrado(marcadas);
+  if (!aBorrar.length) return;
   let borrados = 0;
-  const errores = [];
-  for (const c of marcadas) {
+  const errores = marcadas.filter(c => !aBorrar.includes(c)).map(c => `«${c.dataset.titulo}» sigue en ejecución.`);
+  for (const c of aBorrar) {
     try {
       const r = await fetch(`/api/pfgs/${c.dataset.sel}/borrar`, {method: "POST"});
-      if (r.ok) { borrados++; seleccion.delete(c.dataset.sel); }
+      if (r.ok) { borrados++; seleccion.delete(c.dataset.sel); c.closest(".card")?.classList.add("saliendo"); }
       else errores.push(`${c.dataset.titulo}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}.`);
     } catch { errores.push(`${c.dataset.titulo}: no se pudo borrar.`); }
   }
   aviso([borrados && `${borrados} PFG ${borrados === 1 ? "borrado" : "borrados"}.`, ...errores].filter(Boolean).join(" "));
-  pintado = ""; cargar();
+  await new Promise(r => setTimeout(r, 180));  // deja terminar el desvanecido de las tarjetas
+  pintado = "";
+  if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(cargar);
+  else cargar();
 }
 
 async function subir(files) {
@@ -478,6 +556,7 @@ $("#tema").onclick = () => {
 temaSistema.onchange = aplicarTema;
 $("#cargar").onclick = () => $("#archivo").click();
 $("#archivo").onchange = e => { subir(e.target.files); e.target.value = ""; };
+$("#confirmar").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });  // clic en el fondo: cancelar
 async function post(url, cuerpo) {
   try {
     const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(cuerpo ?? {})});
@@ -496,7 +575,7 @@ document.addEventListener("click", async e => {
   }
   const borrar = e.target.closest("[data-borrar]");
   if (borrar) {
-    if (!confirm(`¿Borrar «${borrar.dataset.titulo}»? Se borran el PDF y todo lo generado a partir de él: resúmenes, ficha, preguntas y registros. No se puede deshacer.`)) return;
+    if (!(await confirmarBorrado([borrar])).length) return;
     if (await post(`/api/pfgs/${borrar.dataset.borrar}/borrar`)) { aviso("PFG borrado."); location.hash = "#/"; }
     return;
   }
