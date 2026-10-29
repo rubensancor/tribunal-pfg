@@ -31,7 +31,7 @@ Un H1, un párrafo con el comportamiento visible y cuatro H2 en este orden: `Sub
 ## Funcionalidades
 
 - [Subir memorias](./subir-pfg.md): botón, arrastrar y soltar, nombres repetidos y rechazo de archivos que no son PDF.
-- [Estado y siguiente paso](./estados-pfg.md): estados de la tarjeta, KPI, progreso, comando del siguiente paso y botón Copiar.
+- [Estado y siguiente paso](./estados-pfg.md): estados de la tarjeta, KPI, progreso, comando del siguiente paso, botón Copiar y borrar varios a la vez.
 - [Detalle de un PFG](./detalle-pfg.md): ficha, secciones, preguntas con filtro por categoría, enlaces al PDF, borrar y PFG inexistente.
 - [Ejecutar fases y ajustes](./ejecutar-fases.md): harness y modelo por fase, lanzar, detener, resultado sin avance y protección de origen.
 - [CLI pfg.py](./cli-pfg.md): `trocear`, `validar` e `imagen` sobre la copia desechable.

@@ -10,6 +10,7 @@ Cada tarjeta muestra el estado del PFG, deducido de los archivos que hay en `pfg
 - `estado-preguntas`: hay `preguntas.json`. Insignia «Preguntas sin clasificar» y el mismo comando.
 - `estado-clasificadas`: hay `clasificacion.json`. Insignia «Listo» y ningún comando.
 - `estado-copiar`: el botón «o copia la instrucción para tu agente» copia el comando al portapapeles y cambia a «Copiado».
+- `borrar-varios`: cada tarjeta tiene una casilla «Seleccionar <título>». Con alguna marcada aparece la barra «N seleccionados» con «Seleccionar todos», «Quitar selección» y «Borrar seleccionados». La selección sobrevive al refresco cada 4 s. «Borrar seleccionados» pide confirmación con la lista de títulos y borra una a una. Las que tienen una ejecución en curso no se borran, salen en el aviso y siguen marcadas.
 - `estado-kpi`: «PFG cargados», «por leer», «en preparación» y «listo(s) para la defensa», en una frase.
 
 ## How to get to it (user POV)
@@ -32,6 +33,7 @@ Preconditions:
 - **Listo.** `$V fase memoria-demo-verificacion clasificadas`. La tarjeta muestra `Listo` y `expect(card.locator("code")).to_have_count(0)`. `ev("estado-listo")`.
 - **Refresco automático.** Con la página abierta, en el mismo guion, cambia de fase sin recargar: `import subprocess; subprocess.run([".agents/skills/verify-tribunal/verificar.py", "fase", "memoria-demo-verificacion", "preguntas"], check=True)`. En menos de 5 s la tarjeta pasa a `Sin clasificar` sin `page.reload()`.
 - **KPI.** Con un PFG en `clasificadas` y otro recién subido, `expect(page.get_by_role("main")).to_contain_text("2 PFG cargados")`, `1 por leer` y `1 listo para la defensa`.
+- **Borrar varios.** Sube cuatro memorias. Marca dos con `page.get_by_role("checkbox", name="Seleccionar <título>").check()`: la URL no cambia y `#seleccion` dice `2 seleccionados`. Con `page.once("dialog", lambda d: d.dismiss())`, «Borrar seleccionados» no borra nada. Con `d.accept()`, el estado es `2 PFG borrados.`, quedan 2 tarjetas y sus carpetas siguen en `pfgs`. Para el caso mixto, lanza una fase en una (ver [ejecutar-fases](./ejecutar-fases.md)), marca esa y otra y borra: el estado es `1 PFG borrado. <título>: detén la ejecución en curso antes de borrar este PFG.`
 
 ## Gotchas
 

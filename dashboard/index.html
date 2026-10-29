@@ -54,6 +54,12 @@ h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.01
 .card .abajo { margin-top: auto; display: grid; gap: 10px; padding-top: 4px; }
 .card .pie { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
 .card .pie .ir { position: relative; z-index: 1; margin-left: auto; font-weight: 550; text-decoration: none; }
+.card .marca-sel { display: flex; align-items: center; gap: 8px; }
+.card .marca-sel input { position: relative; z-index: 1; margin: 0; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.card:has([data-sel]:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.seleccion { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: -4px 0 14px; padding: 8px 14px; border-radius: 8px; background: var(--accent-soft); }
+.seleccion[hidden] { display: none; }
+.seleccion .btn.peligro { margin-left: auto; }
 
 .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 99px; background: var(--line); color: var(--muted); }
 .badge.leyendo { background: var(--warn-soft); color: var(--warn); }
@@ -248,7 +254,16 @@ const progreso = p => p.leidas < p.secciones
   : `<span class="muted">Secciones leídas · sintetizando…</span>`;
 
 // ---------- vistas ----------
+const seleccion = new Set();  // ids marcados en la lista; las casillas se repintan cada 4 s
+const barraSeleccion = total => `<div class="seleccion" id="seleccion"${seleccion.size ? "" : " hidden"}>
+    <span><b>${seleccion.size}</b> ${seleccion.size === 1 ? "seleccionado" : "seleccionados"}</span>
+    ${seleccion.size < total ? `<button class="btn enlace" type="button" data-sel-todos>Seleccionar todos</button>` : ""}
+    <button class="btn enlace" type="button" data-sel-ninguno>Quitar selección</button>
+    <button class="btn peligro" type="button" data-borrar-sel>Borrar seleccionados</button></div>`;
+const repintarSeleccion = () => $("#seleccion").outerHTML = barraSeleccion(document.querySelectorAll("[data-sel]").length);
+
 function rejilla(pfgs) {
+  for (const id of seleccion) if (!pfgs.some(p => p.id === id)) seleccion.delete(id);
   if (!pfgs.length) return vacio("Aún no hay ningún PFG", `<p>Arrastra aquí las memorias en PDF o pulsa «Cargar PFG».</p>
     <ol class="pasos"><li>El agente lee cada memoria y prepara una ficha con las páginas citadas.</li>
       <li>Después propone preguntas para la defensa, ordenadas por prioridad.</li><li>El tribunal decide: la herramienta no califica.</li></ol>`);
@@ -257,9 +272,11 @@ function rejilla(pfgs) {
   const partes = [[n(["pendiente", "leyendo"]), "por leer"], [n(["leido", "preguntas"]), "en preparación"],
     [listos, listos === 1 ? "listo para la defensa" : "listos para la defensa"]].filter(([k]) => k);
   return `<p class="resumen"><b>${pfgs.length}</b> PFG ${pfgs.length === 1 ? "cargado" : "cargados"}: ${partes.map(([k, t]) => `<b>${k}</b> ${t}`).join(" · ")}</p>
+    ${barraSeleccion(pfgs.length)}
     <div class="grid">${pfgs.map(p => `
       <article class="card">
-        <div class="meta"><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span><span class="muted">${fecha(p.modificado)}</span></div>
+        <div class="meta"><span class="marca-sel"><input type="checkbox" data-sel="${p.id}" data-titulo="${h(titulo(p))}" aria-label="Seleccionar ${h(titulo(p))}"${seleccion.has(p.id) ? " checked" : ""}>
+          <span class="badge ${p.estado}">${ESTADOS[p.estado]}</span></span><span class="muted">${fecha(p.modificado)}</span></div>
         <h2><a href="#/${p.id}">${h(titulo(p))}</a></h2>
         ${p.estudiante ? `<span class="muted">${h(p.estudiante)}</span>` : ""}
         ${p.estado === "leyendo" ? progreso(p) : ""}
@@ -400,6 +417,23 @@ async function cargar() {
   abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
 }
 
+async function borrarSeleccion() {
+  const marcadas = [...document.querySelectorAll("[data-sel]:checked")];
+  if (!marcadas.length || !confirm(`¿Borrar ${marcadas.length} PFG?\n\n${marcadas.map(c => `· ${c.dataset.titulo}`).join("\n")}\n\n`
+    + "Se borran sus PDF y todo lo generado a partir de ellos: resúmenes, fichas, preguntas y registros. No se puede deshacer.")) return;
+  let borrados = 0;
+  const errores = [];
+  for (const c of marcadas) {
+    try {
+      const r = await fetch(`/api/pfgs/${c.dataset.sel}/borrar`, {method: "POST"});
+      if (r.ok) { borrados++; seleccion.delete(c.dataset.sel); }
+      else errores.push(`${c.dataset.titulo}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}.`);
+    } catch { errores.push(`${c.dataset.titulo}: no se pudo borrar.`); }
+  }
+  aviso([borrados && `${borrados} PFG ${borrados === 1 ? "borrado" : "borrados"}.`, ...errores].filter(Boolean).join(" "));
+  pintado = ""; cargar();
+}
+
 async function subir(files) {
   let subidos = 0;
   const errores = [];
@@ -466,12 +500,27 @@ document.addEventListener("click", async e => {
     if (await post(`/api/pfgs/${borrar.dataset.borrar}/borrar`)) { aviso("PFG borrado."); location.hash = "#/"; }
     return;
   }
+  if (e.target.closest("[data-borrar-sel]")) return borrarSeleccion();
+  const todos = e.target.closest("[data-sel-todos], [data-sel-ninguno]");
+  if (todos) {
+    document.querySelectorAll("[data-sel]").forEach(c => {
+      c.checked = "selTodos" in todos.dataset;
+      c.checked ? seleccion.add(c.dataset.sel) : seleccion.delete(c.dataset.sel);
+    });
+    return repintarSeleccion();
+  }
   if (e.target.closest("[data-imprimir]")) return print();
   const b = e.target.closest("[data-copiar]");
   if (!b) return;
   navigator.clipboard.writeText(b.dataset.copiar).then(() => {
     const t = b.dataset.texto ??= b.textContent; b.textContent = "Copiado"; setTimeout(() => b.textContent = t, 1500);
   });
+});
+document.addEventListener("change", e => {
+  const id = e.target.dataset.sel;
+  if (!id) return;
+  e.target.checked ? seleccion.add(id) : seleccion.delete(id);
+  repintarSeleccion();
 });
 document.addEventListener("input", e => {  // los niveles de esfuerzo dependen del harness y del modelo
   const k = e.target.dataset.modelo || e.target.dataset.fase;

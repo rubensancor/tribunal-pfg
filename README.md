@@ -55,7 +55,7 @@ Están en `config/categorias.json`; edítalas libremente. Las preguntas se gener
 
 ## Privacidad
 
-Las memorias se quedan en `pfgs/`, que no se sube a git. Para quitar una, pulsa **Borrar** en su detalle: se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
+Las memorias se quedan en `pfgs/`, que no se sube a git. Para quitar una, pulsa **Borrar** en su detalle; para quitar varias, márcalas en la lista y pulsa **Borrar seleccionados**. En los dos casos se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
 
 ## Windows
 
