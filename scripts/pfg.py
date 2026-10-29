@@ -7,9 +7,11 @@
 
   uv run scripts/pfg.py trocear <id>        memoria.pdf -> secciones/indice.json + NN.txt
   uv run scripts/pfg.py validar <id>        comprueba los JSON que escriben los agentes
-  uv run scripts/pfg.py imagen <id> <pdf>   renderiza una página a PNG (figuras con datos)
+  uv run scripts/pfg.py imagen <id> <pdf>   paginas/pNNN.png (figuras con datos) y pNNN.json (palabras, para el lector)
+  uv run scripts/pfg.py paginas <id>        paginas/indice.json: tamaño y numeración impresa de cada página
 """
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -21,6 +23,7 @@ TROZO = 12     # páginas por trozo cuando no hay marcador o una sección es dem
 DIVIDIR = 30   # un capítulo más largo se divide por sus subapartados
 MAX_PAGS = 40  # ninguna sección supera esto
 MIN_PAGS = 6   # una sección más corta se junta con su vecina: menos lectores para lo mismo
+DPI = 200
 
 TENSIONES = {"sin_justificar", "sin_evidencia", "incoherencia", "validacion_debil",
              "limite_no_explorado", "cambio_de_nivel"}
@@ -195,7 +198,38 @@ def validar(d):
                     problemas.append(f"clasificacion.json.{pid}: categoría desconocida {v['categoria']!r}")
         elif c is not None:
             problemas.append("clasificacion.json: se esperaba un objeto {id: {categoria, motivo}}")
+
+    # No se cruza con anotaciones.json: el docente puede borrar una nota mientras el agente responde.
+    if (d / "respuestas.json").exists():
+        r = _cargar(d / "respuestas.json", problemas)
+        if isinstance(r, dict):
+            for aid, v in r.items():
+                donde = f"respuestas.json.{aid}"
+                if _faltan(v, ["nota", "respuesta"], donde, problemas):
+                    continue
+                if not isinstance(v["nota"], str):
+                    problemas.append(f"{donde}.nota: debe ser el texto de la nota respondida")
+                _anclados(v["respuesta"], f"{donde}.respuesta", problemas)
+        elif r is not None:
+            problemas.append("respuestas.json: se esperaba un objeto {id: {nota, respuesta}}")
     return problemas
+
+
+def escribir(ruta, datos):
+    """El dashboard puede pedir la misma página dos veces a la vez: nunca debe leer un archivo a medias."""
+    ruta.parent.mkdir(exist_ok=True)
+    tmp = ruta.with_name(f".{ruta.name}.{os.getpid()}")
+    tmp.write_bytes(datos)
+    os.replace(tmp, ruta)
+
+
+def paginas(pfg_id):
+    import pymupdf
+    d = dir_pfg(pfg_id)
+    doc = pymupdf.open(d / "memoria.pdf")
+    indice = [{"w": round(p.rect.width, 2), "h": round(p.rect.height, 2), "pag": p.get_label() or None} for p in doc]
+    escribir(d / "paginas" / "indice.json", json.dumps(indice, ensure_ascii=False).encode())
+    print(d / "paginas" / "indice.json")
 
 
 def imagen(pfg_id, pdf):
@@ -204,9 +238,16 @@ def imagen(pfg_id, pdf):
     doc = pymupdf.open(d / "memoria.pdf")
     if not 1 <= pdf <= doc.page_count:
         sys.exit(f"la página {pdf} no existe (el PDF tiene {doc.page_count})")
+    page = doc[pdf - 1]
+    w, h = page.rect.width, page.rect.height
+    # Mismo orden que get_text() y NN.txt, pero con las ligaduras («ﬁ») separadas. NFKC también las separa,
+    # pero cambiaría «n.º» por «n.o» y «m²» por «m2».
+    flags = pymupdf.TEXTFLAGS_WORDS & ~pymupdf.TEXT_PRESERVE_LIGATURES
+    palabras = [[round(x0 / w, 4), round(y0 / h, 4), round(x1 / w, 4), round(y1 / h, 4), t]
+                for x0, y0, x1, y1, t, *_ in page.get_text("words", flags=flags)]
     out = d / "paginas" / f"p{pdf:03d}.png"
-    out.parent.mkdir(exist_ok=True)
-    doc[pdf - 1].get_pixmap(dpi=110).save(out)
+    escribir(out.with_suffix(".json"), json.dumps({"palabras": palabras}, ensure_ascii=False).encode())
+    escribir(out, page.get_pixmap(dpi=DPI).tobytes("png"))
     print(out)
 
 
@@ -219,6 +260,8 @@ def main(args):
         sys.exit(1 if problemas else 0)
     elif len(args) >= 3 and args[0] == "imagen" and args[2].isdigit():
         imagen(args[1], int(args[2]))
+    elif len(args) >= 2 and args[0] == "paginas":
+        paginas(args[1])
     else:
         sys.exit(__doc__)
 

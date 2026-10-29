@@ -5,6 +5,7 @@ Prepara las defensas de Proyecto Fin de Grado:
 - Un **dashboard local** donde cargas las memorias en PDF.
 - La skill **`leer-pfg`** trocea cada memoria, la resume por secciones con un modelo barato y escribe la ficha de lectura con el modelo potente.
 - La skill **`preguntas-pfg`** genera preguntas para la defensa y después las clasifica por categorías.
+- Un **lector** en el dashboard para leer la memoria y anotarla. La skill **`anotaciones-pfg`** responde las notas que dirijas al agente.
 
 Funciona con Claude Code, Codex, Pi y Antigravity: las skills están en `.agents/skills/`. La IA prepara y el tribunal juzga: el sistema no pone notas.
 
@@ -25,6 +26,20 @@ uv run dashboard/server.py        # abre http://127.0.0.1:8765
    - `usa la skill leer-pfg con el PFG <id>`
    - `usa la skill preguntas-pfg con el PFG <id>`
 3. El dashboard se actualiza solo. Imprime la pestaña Preguntas para llevarla a la defensa.
+
+### Leer y anotar la memoria
+
+Pulsa **Leer memoria** o cualquier enlace `pág. N` del detalle: la memoria se abre a la derecha, en esa página, y la ficha o la pregunta sigue a la vista. Con ⌘ o Ctrl más clic se abre el visor del navegador.
+
+Selecciona texto y elige qué hacer con él:
+
+| Botón | Para quién | Dónde se guarda |
+|---|---|---|
+| **Resaltar** o **Nota personal** | solo para ti; ningún agente la lee | `notas-personales.json` |
+| **Preguntar al agente** | la skill `anotaciones-pfg`, que responde con páginas | `anotaciones.json` → `respuestas.json` |
+| **Para las preguntas** | la skill `preguntas-pfg`, como duda del tribunal | `anotaciones.json` |
+
+**Nota en esta página** sirve para figuras y tablas. Puedes cambiar el tipo de una nota en cualquier momento. **Enviar N preguntas al agente** lanza `anotaciones-pfg` con el harness de la fila «Respuestas a tus notas» de Ajustes; si editas una nota respondida, vuelve a quedar pendiente.
 
 Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemini Pro.
 
@@ -55,7 +70,7 @@ Están en `config/categorias.json`; edítalas libremente. Las preguntas se gener
 
 ## Privacidad
 
-Las memorias se quedan en `pfgs/`, que no se sube a git. Para quitar una, pulsa **Borrar** en su detalle; para quitar varias, márcalas en la lista y pulsa **Borrar seleccionados**. En los dos casos se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
+Las memorias y tus notas se quedan en `pfgs/`, que no se sube a git. Las notas personales no las lee ningún agente. Para quitar una, pulsa **Borrar** en su detalle; para quitar varias, márcalas en la lista y pulsa **Borrar seleccionados**. En los dos casos se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
 
 ## Windows
 

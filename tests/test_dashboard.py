@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Self-check de la ejecución de fases del dashboard con un agente falso. Uso: uv run tests/test_dashboard.py"""
+"""Self-check del dashboard: fases con un agente falso y notas del lector. Uso: uv run tests/test_dashboard.py"""
+import json
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "dashboard"))
@@ -162,5 +165,101 @@ with tempfile.TemporaryDirectory() as tmp:
     esperar("detenida")
     server.borrar(d)
     assert not d.exists() and "demo" not in server.EJECUCIONES
+
+    # Notas del lector. Las páginas son las que escribiría `pfg.py paginas` e `imagen`.
+    d = server.PFGS / "notas"
+    (d / "paginas").mkdir(parents=True)
+    (d / "memoria.pdf").write_bytes(b"%PDF")
+    (d / "paginas" / "indice.json").write_text(json.dumps([{"w": 595, "h": 842, "pag": None}] * 2 + [{"w": 595, "h": 842, "pag": "1"}]))
+    (d / "paginas" / "p003.json").write_text(json.dumps({"palabras": [[.1, .1, .2, .12, w] for w in
+                                                                      "La latencia baja un 30 %".split()]}))
+    archivo = lambda nombre: json.loads((d / nombre).read_text()) if (d / nombre).exists() else {}  # noqa: E731
+    notas = lambda: {n["id"]: n for n in server.anotaciones(d)}  # noqa: E731
+
+    server.guardar_anotacion(d, "aaaa1111", {"tipo": "agente", "pdf": 3, "palabras": [1, 2], "nota": "", "cita": "inventada"})
+    assert archivo("anotaciones.json")["aaaa1111"]["cita"] == "latencia baja", "la cita sale de la página, no del navegador"
+    assert notas()["aaaa1111"]["pag"] == "1" and not notas()["aaaa1111"]["pendiente"], "sin texto no hay nada que preguntar"
+    assert "no hay notas pendientes" in falla(server.lanzar, d, "anotaciones-pfg")
+
+    server.guardar_anotacion(d, "bbbb2222", {"tipo": "personal", "pdf": 1, "palabras": None, "nota": "Releer con calma"})
+    assert set(archivo("notas-personales.json")) == {"bbbb2222"} and "bbbb2222" not in archivo("anotaciones.json")
+    assert not notas()["bbbb2222"]["pendiente"]
+
+    server.guardar_anotacion(d, "aaaa1111", {"tipo": "agente", "pdf": 3, "palabras": [1, 2], "nota": "¿Frente a qué?"})
+    assert notas()["aaaa1111"]["pendiente"] and notas()["aaaa1111"]["respuesta"] is None
+    (d / "respuestas.json").write_text(json.dumps({"aaaa1111": {"nota": "¿Frente a qué?", "respuesta": [
+        {"texto": "Frente al sistema anterior.", "pdf": 3, "pag": "1"}]}}))
+    assert not notas()["aaaa1111"]["pendiente"] and notas()["aaaa1111"]["respuesta"][0]["pdf"] == 3
+    server.guardar_anotacion(d, "aaaa1111", {"tipo": "agente", "pdf": 3, "palabras": [1, 2], "nota": "¿Con qué carga?"})
+    assert notas()["aaaa1111"]["pendiente"] and notas()["aaaa1111"]["respuesta"], "editada: pendiente otra vez, con la respuesta vieja"
+
+    creada = notas()["aaaa1111"]["creada"]
+    server.guardar_anotacion(d, "aaaa1111", {"tipo": "personal", "pdf": 3, "palabras": [1, 2], "nota": "¿Con qué carga?"})
+    assert "aaaa1111" not in archivo("anotaciones.json") and "aaaa1111" in archivo("notas-personales.json")
+    assert notas()["aaaa1111"]["creada"] == creada and not notas()["aaaa1111"]["pendiente"], "el id y la fecha se conservan"
+    server.guardar_anotacion(d, "aaaa1111", {"tipo": "preguntas", "pdf": 3, "palabras": [1, 2], "nota": "¿Con qué carga?"})
+    assert archivo("anotaciones.json")["aaaa1111"]["tipo"] == "preguntas" and "aaaa1111" not in archivo("notas-personales.json")
+    assert not notas()["aaaa1111"]["tarde"]
+    (d / "preguntas.json").write_text("[]")
+    time.sleep(0.01)
+    server.guardar_anotacion(d, "cccc3333", {"tipo": "preguntas", "pdf": 3, "palabras": [0, 0], "nota": "Duda"})
+    assert notas()["cccc3333"]["tarde"] and not notas()["aaaa1111"]["tarde"], "solo las creadas después de generar las preguntas"
+    assert list(notas()) == ["bbbb2222", "cccc3333", "aaaa1111"], "por página y posición"
+
+    for aid, raw, motivo in [
+            ("../x", {"tipo": "agente", "pdf": 3, "palabras": None}, "id de nota"),
+            ("dddd4444", {"tipo": "secreta", "pdf": 3, "palabras": None}, "tipo de nota"),
+            ("dddd4444", {"tipo": "agente", "pdf": 4, "palabras": None}, "la página no existe"),
+            ("dddd4444", {"tipo": "agente", "pdf": "3", "palabras": None}, "la página no existe"),
+            ("dddd4444", {"tipo": "agente", "pdf": 3, "palabras": [0, 6]}, "no están en esa página"),
+            ("dddd4444", {"tipo": "agente", "pdf": 3, "palabras": [2, 1]}, "no están en esa página"),
+            ("dddd4444", {"tipo": "agente", "pdf": 3, "palabras": None, "nota": "x" * 4001}, "4000 caracteres")]:
+        assert motivo in falla(server.guardar_anotacion, d, aid, raw), (raw, motivo)
+    assert "dddd4444" not in notas()
+
+    server.borrar_anotacion(d, "bbbb2222")
+    server.borrar_anotacion(d, "bbbb2222")
+    assert "bbbb2222" not in notas() and archivo("notas-personales.json") == {}
+
+    server.PROMPT = "{comando}"
+    server.guardar_anotacion(d, "eeee5555", {"tipo": "agente", "pdf": 3, "palabras": None, "nota": "¿Y la figura?"})
+    server.lanzar(d, "anotaciones-pfg")
+    assert server.EJECUCIONES["notas"]["proc"].wait() == 0
+    e = server.ejecucion("notas", server.resumen(d)["paso"], con_log=True)
+    assert e["estado"] == "sin_avance" and "usa la skill anotaciones-pfg con el PFG notas" in e["log"], e
+    (d / "respuestas.json").write_text(json.dumps({"eeee5555": {"nota": "¿Y la figura?", "respuesta": []}}))
+    assert server.ejecucion("notas", server.resumen(d)["paso"])["estado"] == "terminada"
+    assert server.resumen(d)["paso"] == "preguntas-pfg", "responder notas no es un paso del flujo"
+    assert "a demanda" in falla(server.lanzar, d, "leer-pfg")
+
+    # Las rutas HTTP, con el mismo control de origen que el resto.
+    srv = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_port}"
+
+    def pedir(ruta, cuerpo=None, origen=None):
+        req = urllib.request.Request(base + ruta, None if cuerpo is None else json.dumps(cuerpo).encode(),
+                                     {"Origin": origen} if origen else {})
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, r.read()
+        except urllib.error.HTTPError as err:
+            return err.code, err.read()
+
+    assert pedir("/api/pfgs/notas/anotaciones/ffff6666", {"tipo": "agente", "pdf": 3, "palabras": [4, 5], "nota": "?"})[0] == 200
+    codigo, cuerpo = pedir("/api/pfgs/notas")
+    assert codigo == 200 and any(n["id"] == "ffff6666" and n["cita"] == "30 %" and n["pendiente"]
+                                 for n in json.loads(cuerpo)["anotaciones"])
+    assert pedir("/api/pfgs/notas/ejecutar", {"fase": "anotaciones-pfg"})[0] == 201
+    server.EJECUCIONES["notas"]["proc"].wait()
+    assert pedir("/api/pfgs/notas/anotaciones/ffff6666", {"tipo": "agente", "pdf": 9, "palabras": None})[0] == 409
+    assert pedir("/api/pfgs/notas/anotaciones/ffff6666/borrar", {}, "https://evil.example")[0] == 403
+    assert pedir("/api/pfgs/notas/anotaciones/ffff6666/borrar", {})[0] == 200 and "ffff6666" not in notas()
+    assert pedir("/api/pfgs/notas/ejecutar", {"fase": "anotaciones-pfg"})[0] == 409, "ya no queda nada pendiente"
+    codigo, cuerpo = pedir("/pfgs/notas/paginas/p003.json")
+    assert codigo == 200 and json.loads(cuerpo)["palabras"][1][4] == "latencia"
+    assert pedir("/pfgs/notas/paginas/indice.json")[0] == 200
+    assert pedir("/pfgs/notas/paginas/p3.png")[0] == 404 and pedir("/pfgs/notas/paginas/../memoria.pdf")[0] == 404
+    srv.shutdown()
 
 print("ok")

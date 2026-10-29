@@ -73,9 +73,38 @@ with tempfile.TemporaryDirectory() as tmp:
     (d / "clasificacion.json").write_text(json.dumps({"P1": {"categoria": "validacion", "motivo": ""}}))
     assert pfg.validar(d) == [], pfg.validar(d)
 
+    respuesta = {"nota": "¿Frente a qué?", "respuesta": [{"texto": "Frente a 100 usuarios.", "pdf": 12, "pag": "10"}]}
+    (d / "respuestas.json").write_text(json.dumps({"k3f9a2c1": respuesta}))
+    assert pfg.validar(d) == [], pfg.validar(d)
+    (d / "respuestas.json").write_text(json.dumps({"k3f9a2c1": {**respuesta, "respuesta": [{"texto": "sin página"}]}}))
+    assert any("respuestas.json.k3f9a2c1.respuesta[0]: faltan pdf" in p for p in pfg.validar(d))
+    (d / "respuestas.json").write_text(json.dumps([respuesta]))
+    assert any("respuestas.json: se esperaba un objeto" in p for p in pfg.validar(d))
+    (d / "respuestas.json").unlink()
+
     # Sin etiquetas de página la marca solo lleva el número del PDF.
     pdf(Path(tmp) / "plano" / "memoria.pdf", 3)
     pfg.trocear("plano")
     assert "[[pdf:2]]" in (Path(tmp) / "plano" / "secciones" / "00.txt").read_text()
+
+    # Lo que lee el lector del dashboard: tamaño y etiqueta de cada página, y las palabras en el orden de NN.txt.
+    pfg.paginas("demo")
+    paginas = json.loads((d / "paginas" / "indice.json").read_text())
+    assert len(paginas) == 60 and paginas[0] == {"w": 595.0, "h": 842.0, "pag": "i"} and paginas[2]["pag"] == "1"
+    pfg.paginas("plano")
+    assert json.loads((Path(tmp) / "plano" / "paginas" / "indice.json").read_text())[0]["pag"] is None
+    doc = pymupdf.open(d / "memoria.pdf")
+    doc[11].insert_font(fontname="F0", fontbuffer=pymupdf.Font("cjk").buffer)  # Helvetica no tiene la ligadura «ﬁ»
+    doc[11].insert_text((72, 300), "La eﬁciencia n.º 3 en m²", fontname="F0")
+    doc.saveIncr()
+    pfg.imagen("demo", 12)
+    palabras = json.loads((d / "paginas" / "p012.json").read_text())["palabras"]
+    assert [w[4] for w in palabras] == "Contenido de la página 12 La eficiencia n.º 3 en m²".split(), palabras
+    assert " ".join(w[4] for w in palabras[:5]) in (d / "secciones" / "01.txt").read_text()  # la sección 01 empieza en el pdf 10
+    x0, y0, x1, y1, _ = palabras[0]
+    assert 0 < x0 < x1 < 1 and 0 < y0 < y1 < 1 and abs(x0 - 72 / 595) < .01, palabras[0]
+    assert (d / "paginas" / "p012.png").read_bytes().startswith(b"\x89PNG")
+    assert pymupdf.Pixmap(d / "paginas" / "p012.png").width == round(595 * pfg.DPI / 72)
+    assert not [f for f in (d / "paginas").iterdir() if f.name.startswith(".")], "sin temporales"
 
 print("ok")

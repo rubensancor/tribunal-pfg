@@ -5,7 +5,7 @@ description: Arranca una copia desechable del dashboard del Tribunal PFG (web lo
 
 # Verificar el dashboard del Tribunal PFG
 
-Superficie principal: el dashboard web (`dashboard/server.py` sirve `dashboard/index.html`, una SPA con rutas hash `#/<id>/<pestaña>/<categoría>`). Secundaria: la CLI `scripts/pfg.py` (`trocear`, `validar`, `imagen`). Las skills `leer-pfg` y `preguntas-pfg` las ejecuta un agente y quedan fuera: este arnés simula sus archivos de salida, que son el contrato con el dashboard.
+Superficie principal: el dashboard web (`dashboard/server.py` sirve `dashboard/index.html`, una SPA con rutas hash `#/<id>/<pestaña>/<categoría>`). Secundaria: la CLI `scripts/pfg.py` (`trocear`, `validar`, `imagen`, `paginas`). Las skills `leer-pfg`, `preguntas-pfg` y `anotaciones-pfg` las ejecuta un agente y quedan fuera: este arnés simula sus archivos de salida, que son el contrato con el dashboard.
 
 Todo pasa por un solo script, `.agents/skills/verify-tribunal/verificar.py` (un script de uv; la primera vez descarga playwright y pymupdf). En los ejemplos, `V=.agents/skills/verify-tribunal/verificar.py`, ejecutado desde la raíz del repo.
 

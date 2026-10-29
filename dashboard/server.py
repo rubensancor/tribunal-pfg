@@ -23,7 +23,13 @@ CONFIG_EJECUCION = RAIZ / "config" / "ejecucion.json"
 INDEX = Path(__file__).resolve().parent / "index.html"
 MAX_SUBIDA = 100 * 1024 * 1024
 
-FASES = {"leer-pfg": "Lectura de la memoria", "preguntas-pfg": "Preguntas para la defensa"}
+FASES = {"leer-pfg": "Lectura de la memoria", "preguntas-pfg": "Preguntas para la defensa",
+         "anotaciones-pfg": "Respuestas a tus notas"}
+# Cada tipo de nota vive en el archivo de quien la lee. Las personales van aparte para que ningún agente las abra.
+TIPOS = {"personal": "notas-personales.json", "agente": "anotaciones.json", "preguntas": "anotaciones.json"}
+AID = re.compile(r"[a-z0-9]{4,32}")
+MAX_NOTA = 4000
+PAGINA = re.compile(r"indice\.json|p(\d{3,4})\.(png|json)")
 COMANDOS_SKILLS = ["uv run scripts/pfg.py", "python3 -m json.tool"]  # lo único que ejecutan las skills
 MODELO = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9._:/@-]{0,99})?")  # sin «-» inicial: no puede colarse como flag
 PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder preguntas ni a confirmar nada. "
@@ -93,6 +99,87 @@ def leer(ruta):
 
 def lista(x):
     return x if isinstance(x, list) else []
+
+
+def objeto(x):
+    return x if isinstance(x, dict) and "_error" not in x else {}
+
+
+def escribir(ruta, obj):
+    tmp = ruta.with_name(f".{ruta.name}.tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, ruta)
+
+
+def generado(d, nombre):
+    """paginas/<nombre>, creado con pfg.py si falta (fuera de CERROJO: tarda). None si la página no existe."""
+    ruta = d / "paginas" / nombre
+    if not ruta.exists():
+        m = PAGINA.fullmatch(nombre)
+        cmd = ["imagen", d.name, str(int(m[1]))] if m[1] else ["paginas", d.name]
+        try:
+            subprocess.run(["uv", "run", str(RAIZ / "scripts" / "pfg.py"), *cmd], cwd=RAIZ, capture_output=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return None
+    return ruta if ruta.exists() else None
+
+
+def anotaciones(d):
+    """Las notas del docente unidas a las respuestas del agente. Única definición de «pendiente»."""
+    respuestas = objeto(leer(d / "respuestas.json"))
+    preguntas = d / "preguntas.json"
+    generadas = preguntas.stat().st_mtime if preguntas.exists() else None
+    notas = []
+    for archivo in set(TIPOS.values()):
+        for aid, n in objeto(leer(d / archivo)).items():
+            r = respuestas.get(aid) if n["tipo"] == "agente" else None
+            r = r if isinstance(r, dict) else None
+            notas.append({**n, "id": aid, "respuesta": r and lista(r.get("respuesta")),
+                          "pendiente": n["tipo"] == "agente" and bool(n["nota"].strip()) and (r or {}).get("nota") != n["nota"],
+                          # preguntas-pfg ya se ejecutó sin ella: cuenta solo si se regeneran las preguntas
+                          "tarde": n["tipo"] == "preguntas" and generadas is not None and n["creada"] > generadas})
+    return sorted(notas, key=lambda n: (n["pdf"], (n["palabras"] or [-1])[0], n["creada"]))
+
+
+def guardar_anotacion(d, aid, raw):
+    """Crea o actualiza una nota. El servidor deriva cita y pag para que el navegador no pueda inventarlas."""
+    if not AID.fullmatch(aid):
+        raise ValueError("id de nota no válido")
+    if not isinstance(raw, dict) or raw.get("tipo") not in TIPOS:
+        raise ValueError(f"tipo de nota no válido; usa uno de {sorted(TIPOS)}")
+    pdf, palabras, nota = raw.get("pdf"), raw.get("palabras"), raw.get("nota", "")
+    if not isinstance(nota, str) or len(nota) > MAX_NOTA:
+        raise ValueError(f"la nota debe ser texto de {MAX_NOTA} caracteres como máximo")
+    indice = generado(d, "indice.json")
+    if type(pdf) is not int or not indice or not 1 <= pdf <= len(paginas := json.loads(indice.read_text())):
+        raise ValueError("la página no existe")
+    cita = ""
+    if palabras is not None:
+        texto = generado(d, f"p{pdf:03d}.json")
+        ws = json.loads(texto.read_text())["palabras"] if texto else []
+        if not (isinstance(palabras, list) and len(palabras) == 2 and all(type(i) is int for i in palabras)
+                and 0 <= palabras[0] <= palabras[1] < len(ws)):
+            raise ValueError("las palabras seleccionadas no están en esa página")
+        cita = " ".join(w[4] for w in ws[palabras[0]:palabras[1] + 1])
+    with CERROJO:
+        archivos = {a: objeto(leer(d / a)) for a in set(TIPOS.values())}
+        previa = next((a[aid] for a in archivos.values() if aid in a), {})
+        for a in archivos.values():
+            a.pop(aid, None)  # cambiar el tipo puede cambiarla de archivo
+        archivos[TIPOS[raw["tipo"]]][aid] = {"tipo": raw["tipo"], "pdf": pdf, "pag": paginas[pdf - 1]["pag"],
+                                             "palabras": palabras, "cita": cita, "nota": nota,
+                                             "creada": previa.get("creada", time.time())}
+        for a, notas in archivos.items():
+            if notas or (d / a).exists():
+                escribir(d / a, notas)
+
+
+def borrar_anotacion(d, aid):
+    with CERROJO:
+        for a in set(TIPOS.values()):
+            if aid in (notas := objeto(leer(d / a))):
+                del notas[aid]
+                escribir(d / a, notas)
 
 
 def resumen(d):
@@ -179,8 +266,10 @@ def ejecucion(pfg_id, paso, con_log=False):
     if not e:
         return None
     codigo = e["proc"].poll()
+    avanzo = (not any(n["pendiente"] for n in anotaciones(PFGS / pfg_id)) if e["fase"] == "anotaciones-pfg"
+              else paso != e["fase"])
     estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
-              else "sin_avance" if paso == e["fase"] else "terminada")
+              else "terminada" if avanzo else "sin_avance")
     r = {"paso": e["fase"], "fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
          "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo,
          "despues": FASES["preguntas-pfg"] if e["seguir"] and e["fase"] == "leer-pfg" else None}
@@ -196,20 +285,25 @@ def binario(harness):
         raise ValueError(f"no se encuentra «{b}» en el PATH")
 
 
-def lanzar(d, seguir=False):
-    """Lanza el agente configurado para el siguiente paso del PFG y devuelve su ejecución. ValueError si no se puede."""
+def lanzar(d, fase=None, seguir=False):
+    """Lanza el agente de `fase` (sin ella, el del siguiente paso) y devuelve su ejecución. ValueError si no se puede."""
     with CERROJO:
         if not (d / "memoria.pdf").exists():
             raise ValueError("este PFG ya no existe")
         if (e := EJECUCIONES.get(d.name)) and e["proc"].poll() is None:
             raise ValueError("ya hay una ejecución en curso para este PFG")
-        r = resumen(d)
-        if not r["paso"]:
-            raise ValueError("este PFG ya tiene todas las fases hechas")
-        cfg = config_ejecucion()[r["paso"]]
+        if fase is None:
+            fase = resumen(d)["paso"]
+            if not fase:
+                raise ValueError("este PFG ya tiene todas las fases hechas")
+        elif fase != "anotaciones-pfg":
+            raise ValueError(f"no se puede lanzar la fase {fase!r} a demanda")
+        elif not any(n["pendiente"] for n in anotaciones(d)):
+            raise ValueError("no hay notas pendientes de respuesta")
+        cfg = config_ejecucion()[fase]
         binario(cfg["harness"])
-        argv = comando_agente(cfg["harness"], cfg["modelo"], cfg["esfuerzo"], r["comando"])
-        log = d / "ejecuciones" / f"{time.strftime('%Y%m%d-%H%M%S')}-{r['paso']}.log"
+        argv = comando_agente(cfg["harness"], cfg["modelo"], cfg["esfuerzo"], f"usa la skill {fase} con el PFG {d.name}")
+        log = d / "ejecuciones" / f"{time.strftime('%Y%m%d-%H%M%S')}-{fase}.log"
         log.parent.mkdir(exist_ok=True)
         with open(log, "w", encoding="utf-8") as f:
             f.write(f"$ {shlex.join(argv)}\n\n")
@@ -217,7 +311,7 @@ def lanzar(d, seguir=False):
             # Grupo propio para poder detener también los subprocesos del agente.
             proc = subprocess.Popen(argv, cwd=RAIZ, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT,
                                     start_new_session=True)
-        EJECUCIONES[d.name] = {"fase": r["paso"], "harness": cfg["harness"], "modelo": cfg["modelo"],
+        EJECUCIONES[d.name] = {"fase": fase, "harness": cfg["harness"], "modelo": cfg["modelo"],
                                "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc,
                                "seguir": seguir}
         return EJECUCIONES[d.name]
@@ -288,7 +382,9 @@ def detalle(d):
     return {**r, "ejecucion": ejecucion(d.name, r["paso"], con_log=True), "indice": indice,
             "lecturas": [leer(d / "secciones" / f"{s['n']:02d}.json") for s in indice],
             "analisis": leer(d / "analisis.json"), "preguntas": leer(d / "preguntas.json"),
-            "clasificacion": leer(d / "clasificacion.json"), "categorias": leer(CATEGORIAS)}
+            "clasificacion": leer(d / "clasificacion.json"), "categorias": leer(CATEGORIAS),
+            "anotaciones": anotaciones(d),
+            "ejecutor_notas": HARNESSES[config_ejecucion()["anotaciones-pfg"]["harness"]]["nombre"]}
 
 
 def nuevo_dir(nombre):
@@ -351,6 +447,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.responder(200, detalle(d))
         if d := self.pfg(ruta, r"/pfgs/([a-z0-9-]+)/memoria\.pdf"):
             return self.responder(200, (d / "memoria.pdf").read_bytes(), "application/pdf")
+        if (d := self.pfg(ruta, r"/pfgs/([a-z0-9-]+)/paginas/(.+)")) and PAGINA.fullmatch(nombre := ruta.rsplit("/", 1)[1]) \
+                and (f := generado(d, nombre)):
+            return self.responder(200, f.read_bytes(), "image/png" if nombre.endswith(".png") else "application/json")
         self.responder(404, {"error": "no encontrado"})
 
     def do_POST(self):
@@ -363,8 +462,15 @@ class Handler(BaseHTTPRequestHandler):
                 CONFIG_EJECUCION.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 return self.responder(200, vista_config())
             if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/ejecutar"):
-                lanzar(d)
+                raw = self.cuerpo_json()
+                lanzar(d, raw.get("fase") if isinstance(raw, dict) else None)
                 return self.responder(201, {"ok": True})
+            if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/anotaciones/([^/]+)"):
+                guardar_anotacion(d, url.path.rsplit("/", 1)[1], self.cuerpo_json(4 * MAX_NOTA + 1000))
+                return self.responder(200, {"ok": True})
+            if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/anotaciones/([^/]+)/borrar"):
+                borrar_anotacion(d, url.path.split("/")[-2])
+                return self.responder(200, {"ok": True})
             if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/borrar"):
                 borrar(d)
                 return self.responder(200, {"ok": True})
