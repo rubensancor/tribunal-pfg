@@ -52,7 +52,7 @@ En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard la
 | Claude Code | `claude -p … --permission-mode dontAsk` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`; el resto se deniega |
 | Antigravity | `agy -p … --mode accept-edits` | los de tu `settings.json` de agy: añade `"command(uv run scripts/pfg.py)"` y `"command(python3 -m json.tool)"` a `permissions.allow`, o terminará sin hacer nada |
 | Pi | `pi -p … --no-session --approve` | ninguno: puede ejecutar cualquier comando |
-| OpenCode | `opencode run --standalone --auto -m <modelo>#<esfuerzo>` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`, sin web ni archivos fuera del proyecto; se fijan en `OPENCODE_CONFIG_CONTENT` |
+| OpenCode | `opencode run --standalone --auto -m <modelo>#<esfuerzo>` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`, sin web, sin archivos fuera del proyecto y sin leer tus notas personales (por eso tampoco usa grep); se fijan en `OPENCODE_CONFIG_CONTENT` |
 
 Las memorias son texto ajeno que el agente lee: con Pi, una instrucción escondida en un PDF podría ejecutar comandos. Para memorias que no conoces, prefiere Claude Code.
 
