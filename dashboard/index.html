@@ -123,6 +123,7 @@ body:has(#seleccion.visible) #main { padding-bottom: 96px; }
 @keyframes pulso { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .ejec.en_curso::before { animation: none; } }
 .ejec.fallida, .ejec.detenida, .ejec.sin_avance { color: var(--bad); }
+.ejec.en_cola { color: var(--muted); }
 .ejec button { font-size: 12.5px; padding: 4px 10px; margin-left: auto; }
 pre.log { margin: 8px 0 0; max-height: 320px; overflow: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 form.ajustes select, form.ajustes input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 100%; }
@@ -293,6 +294,7 @@ const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado
 const siguiente = (p, conComando) => {
   const e = p.ejecucion, enCurso = e?.estado === "en_curso";
   if (!enCurso && !p.comando) return "";
+  if (p.cola && !enCurso) return `<div class="accion" data-pfg="${p.id}"><div class="ejec en_cola"><span>En cola para leer y preguntar · puesto ${p.cola}</span></div></div>`;
   return `<div class="accion" data-pfg="${p.id}">${e && e.estado !== "terminada" ? ejecucion(e) : ""}
     ${enCurso ? "" : `<div class="botones"><button class="btn primary" type="button" data-ejecutar>${accion(p)} con ${h(p.ejecutor)}</button>
       ${conComando ? "" : `<button class="btn enlace" type="button" data-copiar="${h(p.comando)}" title="${h(p.comando)}">o copia la instrucción para tu agente</button>`}</div>
