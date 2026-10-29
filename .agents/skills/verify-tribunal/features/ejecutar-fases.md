@@ -6,7 +6,7 @@ El docente elige en Ajustes qué harness (Claude Code, Antigravity o Pi), qué m
 
 - `ajustes-guardar`: guardar el harness y el modelo de cada fase en `config/ejecucion.json`.
 - `ajustes-validar`: un modelo que empieza por `-` o lleva espacios se rechaza con `modelo no válido`.
-- `ajustes-esfuerzo`: el desplegable «Esfuerzo» ofrece los niveles del harness y del modelo (`--effort` en claude y agy, `--thinking` en pi). Con agy y un modelo que no lo admite (`claude-opus-4-6-thinking`) queda desactivado con `este modelo no lo admite`. La API rechaza un nivel que no toca con `no admite el esfuerzo`.
+- `ajustes-esfuerzo`: el desplegable «Esfuerzo» ofrece los niveles del harness y del modelo (`--effort` en claude y agy, `--thinking` en pi). Con agy y un modelo que no lo admite (`claude-opus-4-6-thinking`) queda desactivado con `este modelo no lo admite`. Al cambiar de harness, el modelo se vacía si no es uno de los del nuevo harness, y el esfuerzo vuelve a `el del harness` si el nuevo modelo no lo admite. La API rechaza un nivel que no toca con `no admite el esfuerzo`.
 - `ajustes-avisos`: la lista de harnesses avisa si falta un binario o, en el caso de agy, la regla de permisos.
 - `ejecutar-lanzar`: «Leer la memoria con <harness>» lanza la fase siguiente; la tarjeta pasa a `Ejecutando: <fase> con <harness> (<modelo>, esfuerzo <nivel>)`.
 - `ejecutar-terminar`: la fase avanza (Leído, Preguntas sin clasificar o Listo) y el botón pasa a la fase siguiente.

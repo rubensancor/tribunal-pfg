@@ -469,6 +469,7 @@ document.addEventListener("input", e => {  // los niveles de esfuerzo dependen d
   const harness = document.querySelector(`[name="${k}.harness"]`).value;
   const modelo = document.querySelector(`[name="${k}.modelo"]`);
   const esfuerzo = document.querySelector(`[name="${k}.esfuerzo"]`);
+  if (e.target.dataset.modelo && !Object.hasOwn(harnesses[harness].modelos, modelo.value.trim())) modelo.value = "";  // los modelos son de cada harness
   const lista = niveles(harness, modelo.value.trim());
   modelo.setAttribute("list", `modelos-${harness}`);
   esfuerzo.innerHTML = opcionesEsfuerzo(lista, lista.includes(esfuerzo.value) ? esfuerzo.value : "");
