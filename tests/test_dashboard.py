@@ -130,16 +130,25 @@ with tempfile.TemporaryDirectory() as tmp:
     for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
         (otra / f).unlink()
 
-    preparar(lenta, otra, hasta=lambda r: (r["lenta"]["ejecucion"] or {}).get("estado") == "en_curso" and r["otra"]["cola"])
-    server.borrar(otra)
-    assert "otra" not in server.COLA and not otra.exists(), "borrar saca el PFG de la cola"
+    preparar(lenta, otra, d, rota, hasta=lambda r: (r["lenta"]["ejecucion"] or {}).get("estado") == "en_curso" and r["rota"]["cola"])
+    antes = {p.name: server.EJECUCIONES.get(p.name) for p in (otra, d)}
+    server.desencolar(otra)
+    assert server.resumen(otra)["cola"] is None and (otra / "memoria.pdf").exists(), "sacar de la cola no borra el PFG"
+    assert server.resumen(d)["cola"] == 1, "el siguiente sube un puesto"
+    server.desencolar(otra)
+    server.borrar(rota)
+    assert "rota" not in server.COLA and not rota.exists(), "borrar saca el PFG de la cola"
+    server.desencolar()
+    assert not server.COLA and server.resumen(d)["cola"] is None, "vaciar la cola"
     server.detener(server.EJECUCIONES["lenta"])
     for _ in range(50):
         if server.resumen(lenta)["ejecucion"]["estado"] == "detenida":
             break
         time.sleep(0.1)
+    time.sleep(0.5)
+    assert {p.name: server.EJECUCIONES.get(p.name) for p in (otra, d)} == antes, "lo sacado de la cola no se lanza"
     server.borrar(lenta)
-    server.borrar(rota)
+    server.borrar(otra)
     assert not server.COLA
 
     (d / "clasificacion.json").write_text("{}")
