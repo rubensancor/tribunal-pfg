@@ -230,6 +230,15 @@ def encolar(d):
         HAY_COLA.notify()
 
 
+def desencolar(d=None):
+    """Saca de la cola el PFG d, o todos sin d. No borra nada; si ya empezó, sigue en marcha."""
+    with HAY_COLA:
+        if d is None:
+            COLA.clear()
+        elif d.name in COLA:
+            COLA.remove(d.name)
+
+
 def preparar_cola():
     """Lee y pregunta los PFG de la cola de uno en uno. Una fase fallida, detenida o sin avance pasa al siguiente."""
     while True:
@@ -362,6 +371,12 @@ class Handler(BaseHTTPRequestHandler):
             if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/detener"):
                 if e := EJECUCIONES.get(d.name):
                     detener(e)
+                return self.responder(200, {"ok": True})
+            if d := self.pfg(url.path, r"/api/pfgs/([a-z0-9-]+)/desencolar"):
+                desencolar(d)
+                return self.responder(200, {"ok": True})
+            if url.path == "/api/cola/vaciar":
+                desencolar()
                 return self.responder(200, {"ok": True})
         except ValueError as e:
             return self.responder(409, {"error": str(e)})

@@ -91,7 +91,7 @@ body:has(#seleccion.visible) #main { padding-bottom: 96px; }
 .cola-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .cola-fila a { font-weight: 650; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
 .cola-fila a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.cola-fila button { margin-left: auto; font-size: 12.5px; padding: 4px 10px; }
+.cola-fila button, .cola-siguen button, .cola-cab button { margin-left: auto; font-size: 12.5px; padding: 4px 10px; }
 .cola-pasos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .cola-pasos i { font-style: normal; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .cola-pasos i::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; }
@@ -102,7 +102,7 @@ body:has(#seleccion.visible) #main { padding-bottom: 96px; }
 @media (prefers-reduced-motion: reduce) { .cola-pasos i.ahora::before { animation: none; } }
 .cola-pasos hr { flex: 0 0 22px; border: 0; border-top: 2px solid var(--line); margin: 0; }
 .cola-siguen { list-style: none; margin: 0; padding: 0; display: grid; }
-.cola-siguen li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 2px; font-size: 14px; }
+.cola-siguen li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 2px; font-size: 14px; }
 .cola-siguen li + li { border-top: 1px solid var(--line); }
 .cola-siguen a { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
 .cola-siguen a:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -363,7 +363,7 @@ function panelCola(pfgs) {
   const chips = [[listos, "clasificadas", listos === 1 ? "listo" : "listos"], [problemas, "cola-mal", "con problemas"], [sueltos, "", "sin preparar"]]
     .filter(([k]) => k).map(([k, c, t]) => `<span class="badge ${c}">${k} ${t}</span>`).join("");
   return `<section class="panel-cola" aria-label="Cola de preparación">
-    <div class="cola-cab"><h2>Cola de preparación</h2><span class="muted">${cab}</span></div>
+    <div class="cola-cab"><h2>Cola de preparación</h2><span class="muted">${cab}</span>${enCola.length ? `<button class="btn" type="button" data-vaciar-cola>Vaciar cola</button>` : ""}</div>
     ${enMarcha.map(p => {
       const lectura = p.ejecucion.paso === "leer-pfg";
       return `<div class="cola-actual" data-pfg="${p.id}">
@@ -372,7 +372,7 @@ function panelCola(pfgs) {
         ${lectura && p.secciones ? `<div class="prog" role="progressbar" aria-label="Secciones leídas" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}"><div style="width:${100 * p.leidas / p.secciones}%"></div></div>` : ""}
       </div>`;
     }).join("")}
-    ${enCola.length ? `<ol class="cola-siguen">${enCola.map(p => `<li><span class="cola-num">${p.cola}</span><a href="#/${p.id}">${h(titulo(p))}</a><span class="muted">en espera</span></li>`).join("")}</ol>` : ""}
+    ${enCola.length ? `<ol class="cola-siguen">${enCola.map(p => `<li data-pfg="${p.id}"><span class="cola-num">${p.cola}</span><a href="#/${p.id}">${h(titulo(p))}</a><span class="muted">en espera</span><button class="btn" type="button" data-sacar aria-label="Sacar de la cola: ${h(titulo(p))}">Sacar</button></li>`).join("")}</ol>` : ""}
     ${chips ? `<div class="cola-chips">${chips}</div>` : ""}
   </section>`;
 }
@@ -634,6 +634,14 @@ document.addEventListener("click", async e => {
     accion.disabled = true;
     if (await post(`/api/pfgs/${id}/${"ejecutar" in accion.dataset ? "ejecutar" : "detener"}`))
       aviso("ejecutar" in accion.dataset ? "Ejecución lanzada." : "Ejecución detenida.");
+    pintado = ""; return cargar();
+  }
+  const cola = e.target.closest("[data-sacar], [data-vaciar-cola]");
+  if (cola) {
+    const sacar = "sacar" in cola.dataset;
+    cola.disabled = true;
+    if (await post(sacar ? `/api/pfgs/${cola.closest("[data-pfg]").dataset.pfg}/desencolar` : "/api/cola/vaciar"))
+      aviso(sacar ? "PFG sacado de la cola." : "Cola vaciada.");
     pintado = ""; return cargar();
   }
   const borrar = e.target.closest("[data-borrar]");
