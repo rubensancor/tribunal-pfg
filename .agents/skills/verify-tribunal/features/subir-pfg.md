@@ -8,6 +8,7 @@ El docente carga una o varias memorias en PDF. Cada una aparece como tarjeta «P
 - `subir-arrastrar` sube al soltar archivos en cualquier parte de la página.
 - `subir-repetido` da a un segundo archivo con el mismo nombre el id `<id>-2`.
 - `subir-no-pdf` rechaza un archivo que no es PDF y lo avisa.
+- `subir-preparar` lanza la lectura al cargar si está marcada la casilla «Leer y preguntar al cargar» de la cabecera (manda `preparar=1`), y al terminar bien lanza las preguntas. La tarjeta muestra `Ejecutando: Lectura de la memoria con … · luego, preguntas para la defensa`. La casilla se recuerda en el navegador y no se ve ni se aplica en pantallas de 720 px o menos. Si no se puede lanzar, el PDF queda cargado y el aviso dice `<nombre>: cargado, pero no se pudo lanzar la lectura: <motivo>.`.
 
 ## How to get to it (user POV)
 

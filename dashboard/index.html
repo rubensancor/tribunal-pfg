@@ -38,6 +38,7 @@ a { color: var(--accent); }
 #tema { padding: 7px 9px; }
 #tema svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 #tema svg:not(.ver) { display: none; }
+#preparar { margin: 0; accent-color: var(--accent); }
 
 main.wrap { padding-top: 28px; padding-bottom: 60px; }
 h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.015em; }
@@ -201,7 +202,7 @@ body.arrastrando #suelta { display: grid; }
 #aviso.visible { opacity: 1; }
 
 @media (max-width: 720px) {
-  .marca span, .barra .btn { display: none; }
+  .marca span, .barra .btn, .top label.btn { display: none; }
   .marca { white-space: nowrap; font-size: 16px; }
   .top .wrap { gap: 8px; }
   .top .acciones { gap: 6px; }
@@ -246,6 +247,7 @@ aplicarTema();
         <svg class="sistema" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
       </button>
       <a class="btn" href="#ajustes">Ajustes</a>
+      <label class="btn" title="Al cargar un PDF, lanza la lectura y después las preguntas con los harnesses de Ajustes"><input type="checkbox" id="preparar"> Leer y preguntar al cargar</label>
       <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
     </div>
     <input type="file" id="archivo" accept="application/pdf,.pdf" multiple hidden>
@@ -286,7 +288,7 @@ const titulo = p => p.titulo !== p.id ? p.titulo : p.id.replace(/-/g, " ").repla
 const accion = p => p.estado === "preguntas" ? "Clasificar las preguntas" : p.paso === "leer-pfg" ? "Leer la memoria" : "Generar las preguntas";
 const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Falló", detenida: "Detenida",
   sin_avance: "Terminó sin completar la fase"};
-const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
+const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""}${e.despues && e.estado === "en_curso" ? ` · luego, ${h(e.despues.toLowerCase())}` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
   + `${e.estado === "en_curso" ? `<button class="btn" type="button" data-detener>Detener</button>` : ""}</div>`;
 const siguiente = (p, conComando) => {
   const e = p.ejecucion, enCurso = e?.estado === "en_curso";
@@ -519,9 +521,12 @@ async function subir(files) {
     if (!f.name.toLowerCase().endsWith(".pdf")) { errores.push(`${f.name}: no es un PDF.`); continue; }
     if (f.size > MAX) { errores.push(`${f.name}: ocupa más de 100 MB.`); continue; }
     try {
-      const r = await fetch(`/api/pfgs?nombre=${encodeURIComponent(f.name)}`, {method: "POST", body: f});
-      if (r.ok) subidos++;
-      else errores.push(`${f.name}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}`);
+      const r = await fetch(`/api/pfgs?nombre=${encodeURIComponent(f.name)}${$("#preparar").checked && $("#preparar").checkVisibility() ? "&preparar=1" : ""}`, {method: "POST", body: f});
+      if (r.ok) {
+        subidos++;
+        const {error} = await r.json();
+        if (error) errores.push(`${f.name}: cargado, pero no se pudo lanzar la lectura: ${error}.`);
+      } else errores.push(`${f.name}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}`);
     } catch { errores.push(`${f.name}: no se pudo subir.`); }
   }
   aviso([subidos && `${subidos} PDF cargado${subidos > 1 ? "s" : ""}.`, ...errores].filter(Boolean).join(" "));
@@ -554,6 +559,8 @@ $("#tema").onclick = () => {
   rotularTema();
 };
 temaSistema.onchange = aplicarTema;
+try { $("#preparar").checked = localStorage.preparar === "1"; } catch {}
+$("#preparar").onchange = e => { try { e.target.checked ? localStorage.preparar = "1" : localStorage.removeItem("preparar"); } catch {} };
 $("#cargar").onclick = () => $("#archivo").click();
 $("#archivo").onchange = e => { subir(e.target.files); e.target.value = ""; };
 $("#confirmar").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });  // clic en el fondo: cancelar

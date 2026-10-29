@@ -85,6 +85,30 @@ with tempfile.TemporaryDirectory() as tmp:
     server.detener(server.EJECUCIONES["demo"])
     esperar("detenida")
 
+    agente.write_text('#!/bin/sh\ncase "$2" in *salir-mal*) exit 3;; *dormir*) sleep 30;; '
+                      '*romper*) echo "{\\"titulo\\": \\"T\\"}" > "$PFG/analisis.json"; exit 3;; '
+                      '*leer-pfg*encadenar*) sleep 0.5; echo "{\\"titulo\\": \\"T\\"}" > "$PFG/analisis.json";; '
+                      '*preguntas-pfg*encadenar*) echo "[]" > "$PFG/preguntas.json"; echo "{}" > "$PFG/clasificacion.json";; '
+                      'esac\necho "hecho: $2"\n')
+    server.PROMPT = "{comando} encadenar"
+    server.lanzar(d, seguir=True)
+    assert server.resumen(d)["ejecucion"]["despues"] == "Preguntas para la defensa"
+    for _ in range(50):
+        if server.resumen(d)["estado"] == "clasificadas":
+            break
+        time.sleep(0.1)
+    assert esperar("terminada")["fase"] == "Preguntas para la defensa", "la lectura lanza sola las preguntas"
+    assert server.resumen(d)["estado"] == "clasificadas"
+    for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
+        (d / f).unlink()
+
+    server.PROMPT = "{comando} romper"
+    server.lanzar(d, seguir=True)
+    esperar("fallida")
+    time.sleep(0.3)
+    assert server.EJECUCIONES["demo"]["fase"] == "leer-pfg", "una fase fallida no encadena la siguiente"
+    (d / "analisis.json").unlink()
+
     (d / "clasificacion.json").write_text("{}")
     assert "todas las fases" in falla(server.lanzar, d)
 
