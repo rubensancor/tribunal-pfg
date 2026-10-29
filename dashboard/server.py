@@ -65,7 +65,8 @@ OPENCODE_GRATIS = {"opencode/glm-5.3-flash-free": ["low", "high", "max"],
 OPENCODE_DEFECTO = "opencode/glm-5.3-flash-free"
 # Lo que no está denegado lo aprueba --auto. execute es Code Mode, que trae fetch y se salta webfetch. grep no
 # filtra por ruta: con una carpeta concreta devolvería las notas personales aunque read las deniegue.
-OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDOS_SKILLS}}, "execute": "deny",
+OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDOS_SKILLS},
+                              f"*{TIPOS['personal']}*": "deny"}, "execute": "deny",
                      "webfetch": "deny", "websearch": "deny", "external_directory": "deny", "question": "deny",
                      "read": {"*": "allow", f"*{TIPOS['personal']}": "deny"}, "grep": "deny"}
 
