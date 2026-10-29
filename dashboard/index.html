@@ -83,6 +83,34 @@ body:has(#seleccion.visible) #main { padding-bottom: 96px; }
 .prog { margin-top: 4px; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
 .prog div { height: 100%; background: var(--warn); transition: width .4s; }
 
+.panel-cola { display: grid; gap: 14px; margin: 0 0 18px; padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.panel-cola h2 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: .01em; }
+.cola-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 13px; }
+.cola-actual { display: grid; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--warn-soft); }
+.cola-actual .prog { margin: 0; }
+.cola-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.cola-fila a { font-weight: 650; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.cola-fila a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.cola-fila button { margin-left: auto; font-size: 12.5px; padding: 4px 10px; }
+.cola-pasos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.cola-pasos i { font-style: normal; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.cola-pasos i::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; }
+.cola-pasos i.hecho { color: var(--ok); }
+.cola-pasos i.hecho::before, .cola-pasos i.ahora::before { background: currentColor; }
+.cola-pasos i.ahora { color: var(--warn); font-weight: 600; }
+.cola-pasos i.ahora::before { animation: pulso 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .cola-pasos i.ahora::before { animation: none; } }
+.cola-pasos hr { flex: 0 0 22px; border: 0; border-top: 2px solid var(--line); margin: 0; }
+.cola-siguen { list-style: none; margin: 0; padding: 0; display: grid; }
+.cola-siguen li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 2px; font-size: 14px; }
+.cola-siguen li + li { border-top: 1px solid var(--line); }
+.cola-siguen a { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.cola-siguen a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.cola-num { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); text-align: right; }
+.cola-siguen .muted { font-size: 12.5px; }
+.cola-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge.cola-mal { background: var(--bad-soft); color: var(--bad); }
+
 .cmd { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 6px 6px 10px; }
 .cmd code { flex: 1; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .cmd button { font-size: 12.5px; padding: 4px 10px; }
@@ -323,6 +351,32 @@ function repintarSeleccion() {
     <button class="btn borrar" type="button" data-borrar-sel>${PAPELERA}Borrar seleccionados</button>`;
 }
 
+function panelCola(pfgs) {
+  const enMarcha = pfgs.filter(p => p.ejecucion?.estado === "en_curso");
+  const enCola = pfgs.filter(p => p.cola).sort((a, b) => a.cola - b.cola);
+  if (!enMarcha.length && !enCola.length) return "";
+  const fuera = pfgs.filter(p => !p.cola && p.ejecucion?.estado !== "en_curso");
+  const mal = p => ["fallida", "sin_avance", "detenida"].includes(p.ejecucion?.estado);
+  const listos = fuera.filter(p => p.estado === "clasificadas").length, problemas = fuera.filter(mal).length;
+  const sueltos = fuera.length - listos - problemas;
+  const cab = [[enMarcha.length, "en marcha"], [enCola.length, "en espera"]].filter(([k]) => k).map(([k, t]) => `${k} ${t}`).join(" · ");
+  const chips = [[listos, "clasificadas", listos === 1 ? "listo" : "listos"], [problemas, "cola-mal", "con problemas"], [sueltos, "", "sin preparar"]]
+    .filter(([k]) => k).map(([k, c, t]) => `<span class="badge ${c}">${k} ${t}</span>`).join("");
+  return `<section class="panel-cola" aria-label="Cola de preparación">
+    <div class="cola-cab"><h2>Cola de preparación</h2><span class="muted">${cab}</span></div>
+    ${enMarcha.map(p => {
+      const lectura = p.ejecucion.paso === "leer-pfg";
+      return `<div class="cola-actual" data-pfg="${p.id}">
+        <div class="cola-fila"><a href="#/${p.id}">${h(titulo(p))}</a><button class="btn" type="button" data-detener>Detener</button></div>
+        <div class="cola-pasos"><i class="${lectura ? "ahora" : "hecho"}">Lectura${lectura && p.secciones ? ` · ${p.leidas}/${p.secciones}` : ""}</i><hr><i class="${lectura ? "" : "ahora"}">Preguntas</i></div>
+        ${lectura && p.secciones ? `<div class="prog" role="progressbar" aria-label="Secciones leídas" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}"><div style="width:${100 * p.leidas / p.secciones}%"></div></div>` : ""}
+      </div>`;
+    }).join("")}
+    ${enCola.length ? `<ol class="cola-siguen">${enCola.map(p => `<li><span class="cola-num">${p.cola}</span><a href="#/${p.id}">${h(titulo(p))}</a><span class="muted">en espera</span></li>`).join("")}</ol>` : ""}
+    ${chips ? `<div class="cola-chips">${chips}</div>` : ""}
+  </section>`;
+}
+
 function rejilla(pfgs) {
   for (const id of seleccion) if (!pfgs.some(p => p.id === id)) seleccion.delete(id);
   if (!pfgs.length) return vacio("Aún no hay ningún PFG", `<p>Arrastra aquí las memorias en PDF o pulsa «Cargar PFG».</p>
@@ -332,7 +386,7 @@ function rejilla(pfgs) {
   const listos = n(["clasificadas"]);
   const partes = [[n(["pendiente", "leyendo"]), "por leer"], [n(["leido", "preguntas"]), "en preparación"],
     [listos, listos === 1 ? "listo para la defensa" : "listos para la defensa"]].filter(([k]) => k);
-  return `<p class="resumen"><b>${pfgs.length}</b> PFG ${pfgs.length === 1 ? "cargado" : "cargados"}: ${partes.map(([k, t]) => `<b>${k}</b> ${t}`).join(" · ")}</p>
+  return `${panelCola(pfgs)}<p class="resumen"><b>${pfgs.length}</b> PFG ${pfgs.length === 1 ? "cargado" : "cargados"}: ${partes.map(([k, t]) => `<b>${k}</b> ${t}`).join(" · ")}</p>
     <div class="grid">${pfgs.map(p => `
       <article class="card" style="view-transition-name: pfg-${p.id}">
         <div class="meta"><span class="marca-sel"><label class="sel"><input type="checkbox" data-sel="${p.id}" ${datosBorrado(p)} aria-label="Seleccionar ${h(titulo(p))}"${seleccion.has(p.id) ? " checked" : ""}></label>
