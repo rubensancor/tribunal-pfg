@@ -37,7 +37,7 @@ a { color: var(--accent); }
 [data-tema="noche"] .btn.primary { color: #0d1430; }
 #tema { padding: 7px 9px; }
 #tema svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-[data-tema="noche"] #tema .luna, [data-tema="dia"] #tema .sol { display: none; }
+#tema svg:not(.ver) { display: none; }
 
 main.wrap { padding-top: 28px; padding-bottom: 60px; }
 h1 { font-size: 24px; line-height: 1.25; margin: 6px 0 4px; letter-spacing: -.015em; }
@@ -176,8 +176,12 @@ body.arrastrando #suelta { display: grid; }
 <script>
 // antes de pintar, para que no parpadee: la elección guardada manda sobre la del sistema
 const temaSistema = matchMedia("(prefers-color-scheme: dark)");
-let temaGuardado; try { temaGuardado = localStorage.tema; } catch {}
-document.documentElement.dataset.tema = temaGuardado || (temaSistema.matches ? "noche" : "dia");
+let eleccionTema = "sistema";
+try { if (["dia", "noche"].includes(localStorage.tema)) eleccionTema = localStorage.tema; } catch {}
+function aplicarTema() {
+  document.documentElement.dataset.tema = eleccionTema === "sistema" ? (temaSistema.matches ? "noche" : "dia") : eleccionTema;
+}
+aplicarTema();
 </script>
 </head>
 <body>
@@ -188,6 +192,7 @@ document.documentElement.dataset.tema = temaGuardado || (temaSistema.matches ? "
       <button class="btn" type="button" id="tema">
         <svg class="sol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg class="luna" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+        <svg class="sistema" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
       </button>
       <a class="btn" href="#ajustes">Ajustes</a>
       <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
@@ -407,18 +412,25 @@ function aviso(msg) {
   clearTimeout(avisoT); avisoT = setTimeout(() => el.classList.remove("visible"), 3500);
 }
 
-function ponerTema(t) {
-  document.documentElement.dataset.tema = t;
-  $("#tema").title = t === "noche" ? "Pasar a modo día" : "Pasar a modo noche";
-  $("#tema").setAttribute("aria-label", $("#tema").title);
-}
-ponerTema(document.documentElement.dataset.tema);
-$("#tema").onclick = () => {
-  const t = document.documentElement.dataset.tema === "noche" ? "dia" : "noche";
-  try { localStorage.tema = t; } catch {}
-  ponerTema(t);
+const temas = {
+  sistema: { icono: "sistema", siguiente: "dia", titulo: "Sigue al sistema. Pulsa para modo día" },
+  dia: { icono: "sol", siguiente: "noche", titulo: "Modo día. Pulsa para modo noche" },
+  noche: { icono: "luna", siguiente: "sistema", titulo: "Modo noche. Pulsa para seguir al sistema" },
 };
-temaSistema.onchange = e => temaGuardado || ponerTema(e.matches ? "noche" : "dia");
+function rotularTema() {
+  const { icono, titulo } = temas[eleccionTema];
+  document.querySelectorAll("#tema svg").forEach(s => s.classList.toggle("ver", s.classList.contains(icono)));
+  $("#tema").title = titulo;
+  $("#tema").setAttribute("aria-label", titulo);
+}
+rotularTema();
+$("#tema").onclick = () => {
+  eleccionTema = temas[eleccionTema].siguiente;
+  try { eleccionTema === "sistema" ? localStorage.removeItem("tema") : localStorage.tema = eleccionTema; } catch {}
+  aplicarTema();
+  rotularTema();
+};
+temaSistema.onchange = aplicarTema;
 $("#cargar").onclick = () => $("#archivo").click();
 $("#archivo").onchange = e => { subir(e.target.files); e.target.value = ""; };
 async function post(url, cuerpo) {
