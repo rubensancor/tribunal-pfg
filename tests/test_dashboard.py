@@ -53,6 +53,7 @@ assert server.comando_agente("opencode", "opencode/beam-free", "low", "x")[-2] =
 permisos = server.json.loads(server.HARNESSES["opencode"]["env"]["OPENCODE_CONFIG_CONTENT"])["permission"]
 assert permisos["bash"]["*"] == "deny" and permisos["bash"]["uv run scripts/pfg.py *"] == "allow" and permisos["execute"] == "deny"
 assert permisos["read"]["*notas-personales.json"] == "deny" and permisos["grep"] == "deny", "las notas personales no llegan al agente"
+assert list(permisos["bash"].items())[-1] == ("*notas-personales.json*", "deny"), "en opencode gana la última regla que encaja"
 
 assert server.origen_local("127.0.0.1:8765", None, 8765)
 assert server.origen_local("localhost:8765", "http://localhost:8765", 8765)
