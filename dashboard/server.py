@@ -34,8 +34,8 @@ PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder pregun
 AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 
-def con_modelo(modelo):
-    return ["--model", modelo] if modelo else []
+def opcion(flag, valor):
+    return [flag, valor] if valor else []
 
 
 def faltan_permisos_agy():
@@ -47,20 +47,33 @@ def faltan_permisos_agy():
                 f" a permissions.allow en {AGY_SETTINGS}: en modo headless agy deniega lo que no esté permitido.")
 
 
+ESFUERZOS_CLAUDE = ["low", "medium", "high", "xhigh", "max"]
+ESFUERZOS_PI = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+ESFUERZOS_GEMINI = ["low", "medium", "high"]
+
 # Cómo lanza cada harness una fase sin interacción. Cada uno controla los permisos a su manera.
+# «modelos» son las sugerencias con los niveles de esfuerzo que acepta cada una; «esfuerzos», los del modelo por
+# defecto y los que no están en la lista. agy rechaza --effort con los modelos que fijan el nivel en el nombre.
 HARNESSES = {
-    "claude": {"nombre": "Claude Code", "bin": "claude", "modelos": ["opus", "sonnet", "haiku"],
+    "claude": {"nombre": "Claude Code", "bin": "claude", "modelos": dict.fromkeys(["opus", "sonnet", "haiku"], ESFUERZOS_CLAUDE),
+               "esfuerzos": ESFUERZOS_CLAUDE,
                "nota": "Solo puede ejecutar scripts/pfg.py y python3 -m json.tool; deniega el resto sin preguntar.",
-               "args": lambda prompt, modelo: [
-                   "-p", prompt, "--permission-mode", "dontAsk", *con_modelo(modelo), "--allowedTools",
+               "args": lambda prompt, modelo, esfuerzo: [
+                   "-p", prompt, "--permission-mode", "dontAsk", *opcion("--model", modelo),
+                   *opcion("--effort", esfuerzo), "--allowedTools",
                    " ".join(["Read", "Write", "Edit", "Glob", "Grep", "Agent", *(f"Bash({c}:*)" for c in COMANDOS_SKILLS)])]},
-    "agy": {"nombre": "Antigravity (agy)", "bin": "agy", "modelos": ["gemini-3.8-flash-high", "claude-opus-4-6-thinking"],
+    "agy": {"nombre": "Antigravity (agy)", "bin": "agy", "modelos": {"gemini-3.8-flash": ESFUERZOS_GEMINI, "gemini-3.8-flash-high": [],
+                                                       "claude-opus-4-6-thinking": []},
+            "esfuerzos": ESFUERZOS_GEMINI,
             "nota": "Aplica las ediciones sin preguntar y los comandos según los permisos de tu settings.json de agy.",
             "requisito": faltan_permisos_agy,
-            "args": lambda prompt, modelo: ["-p", prompt, "--mode", "accept-edits", *con_modelo(modelo)]},
-    "pi": {"nombre": "Pi", "bin": "pi", "modelos": ["openai-codex/gpt-6-luna"],
+            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", *opcion("--model", modelo),
+                                                     *opcion("--effort", esfuerzo)]},
+    "pi": {"nombre": "Pi", "bin": "pi", "modelos": {"openai-codex/gpt-6-luna": ESFUERZOS_PI},
+           "esfuerzos": ESFUERZOS_PI,
            "nota": "Pi no tiene permisos: puede ejecutar cualquier comando sin preguntar.",
-           "args": lambda prompt, modelo: ["-p", prompt, "--no-session", "--approve", *con_modelo(modelo)]},
+           "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--no-session", "--approve", *opcion("--model", modelo),
+                                                     *opcion("--thinking", esfuerzo)]},
 }
 
 EJECUCIONES = {}  # id -> ejecución en memoria; se pierde al parar el servidor, que además detiene las que sigan en curso
@@ -105,21 +118,29 @@ def resumen(d):
             "modificado": max(p.stat().st_mtime for p in d.rglob("*"))}
 
 
+def niveles(harness, modelo):
+    h = HARNESSES[harness]
+    return h["modelos"].get(modelo, h["esfuerzos"])
+
+
 def validar_config(raw):
-    """{fase: {harness, modelo}} completo; ValueError con el motivo si algo no vale."""
+    """{fase: {harness, modelo, esfuerzo}} completo; ValueError con el motivo si algo no vale."""
     if not isinstance(raw, dict):
-        raise ValueError("se esperaba un objeto {fase: {harness, modelo}}")
+        raise ValueError("se esperaba un objeto {fase: {harness, modelo, esfuerzo}}")
     cfg = {}
     for fase in FASES:
         v = raw.get(fase) or {}
         if not isinstance(v, dict):
             raise ValueError(f"{fase}: se esperaba un objeto")
-        harness, modelo = v.get("harness", "claude"), v.get("modelo", "")
+        harness, modelo, esfuerzo = v.get("harness", "claude"), v.get("modelo", ""), v.get("esfuerzo", "")
         if harness not in HARNESSES:
             raise ValueError(f"{fase}: harness desconocido {harness!r}")
         if not isinstance(modelo, str) or not MODELO.fullmatch(modelo):
             raise ValueError(f"{fase}: modelo no válido {modelo!r}")
-        cfg[fase] = {"harness": harness, "modelo": modelo}
+        if esfuerzo and esfuerzo not in niveles(harness, modelo):
+            raise ValueError(f"{fase}: {HARNESSES[harness]['nombre']} no admite el esfuerzo {esfuerzo!r} con "
+                             + (f"el modelo {modelo}" if modelo else "su modelo por defecto"))
+        cfg[fase] = {"harness": harness, "modelo": modelo, "esfuerzo": esfuerzo}
     return cfg
 
 
@@ -137,15 +158,15 @@ def vista_config():
     except ValueError as e:
         error = f"{CONFIG_EJECUCION.name} no es válido y se usan los valores por defecto: {e}"
     return {"fases": {f: {"nombre": FASES[f], **c} for f, c in config_ejecucion().items()}, "error": error,
-            "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "nota": h["nota"],
+            "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "esfuerzos": h["esfuerzos"], "nota": h["nota"],
                               "problema": (None if shutil.which(h["bin"]) else f"No se encuentra «{h['bin']}» en el PATH.")
                               or (h.get("requisito") or (lambda: None))()}
                           for k, h in HARNESSES.items()}}
 
 
-def comando_agente(harness, modelo, comando):
+def comando_agente(harness, modelo, esfuerzo, comando):
     h = HARNESSES[harness]
-    return [h["bin"], *h["args"](PROMPT.format(comando=comando), modelo)]
+    return [h["bin"], *h["args"](PROMPT.format(comando=comando), modelo, esfuerzo)]
 
 
 def ejecucion(pfg_id, paso, con_log=False):
@@ -158,7 +179,7 @@ def ejecucion(pfg_id, paso, con_log=False):
     estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
               else "sin_avance" if paso == e["fase"] else "terminada")
     r = {"fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
-         "inicio": e["inicio"], "estado": estado, "codigo": codigo}
+         "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo}
     if con_log:
         with open(e["log"], "rb") as f:
             f.seek(max(f.seek(0, 2) - 6000, 0))
@@ -175,7 +196,7 @@ def lanzar(d):
         if not r["paso"]:
             raise ValueError("este PFG ya tiene todas las fases hechas")
         cfg = config_ejecucion()[r["paso"]]
-        argv = comando_agente(cfg["harness"], cfg["modelo"], r["comando"])
+        argv = comando_agente(cfg["harness"], cfg["modelo"], cfg["esfuerzo"], r["comando"])
         if not shutil.which(argv[0]):
             raise ValueError(f"no se encuentra «{argv[0]}» en el PATH")
         log = d / "ejecuciones" / f"{time.strftime('%Y%m%d-%H%M%S')}-{r['paso']}.log"
@@ -187,7 +208,7 @@ def lanzar(d):
             proc = subprocess.Popen(argv, cwd=RAIZ, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT,
                                     start_new_session=True)
         EJECUCIONES[d.name] = {"fase": r["paso"], "harness": cfg["harness"], "modelo": cfg["modelo"],
-                               "inicio": time.time(), "log": log, "proc": proc}
+                               "esfuerzo": cfg["esfuerzo"], "inicio": time.time(), "log": log, "proc": proc}
 
 
 def detener(e):

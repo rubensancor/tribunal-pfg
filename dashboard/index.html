@@ -226,7 +226,7 @@ const titulo = p => p.titulo !== p.id ? p.titulo : p.id.replace(/-/g, " ").repla
 const accion = p => p.estado === "preguntas" ? "Clasificar las preguntas" : p.paso === "leer-pfg" ? "Leer la memoria" : "Generar las preguntas";
 const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Falló", detenida: "Detenida",
   sin_avance: "Terminó sin completar la fase"};
-const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo ? ` (${h(e.modelo)})` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
+const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
   + `${e.estado === "en_curso" ? `<button class="btn" type="button" data-detener>Detener</button>` : ""}</div>`;
 const siguiente = (p, conComando) => {
   const e = p.ejecucion, enCurso = e?.estado === "en_curso";
@@ -356,18 +356,25 @@ function vistaPreguntas(p, cat) {
 }
 
 // ---------- carga y refresco ----------
+let harnesses = {};
+const niveles = (hk, modelo) => harnesses[hk].modelos[modelo] ?? harnesses[hk].esfuerzos;
+const opcionesEsfuerzo = (lista, actual) => (lista.length ? [["", "el del harness"], ...lista.map(n => [n, n])]
+  : [["", "este modelo no lo admite"]]).map(([v, t]) => `<option value="${h(v)}"${v === actual ? " selected" : ""}>${h(t)}</option>`).join("");
 function vistaAjustes(c) {
+  harnesses = c.harnesses;
   const fila = ([k, f]) => `<tr><td>${h(f.nombre)}</td>
     <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
       `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}</option>`).join("")}</select></td>
-    <td><input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off"></td></tr>`;
+    <td><input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off" data-fase="${k}"></td>
+    <td><select name="${k}.esfuerzo" aria-label="Esfuerzo de ${h(f.nombre)}"${niveles(f.harness, f.modelo).length ? "" : " disabled"}>${
+      opcionesEsfuerzo(niveles(f.harness, f.modelo), f.esfuerzo)}</select></td></tr>`;
   return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav><h1>Ajustes</h1>
-    <p class="muted">Qué harness y qué modelo ejecutan cada fase al pulsar «Ejecutar». Sin modelo, se usa el que tenga configurado el harness.
+    <p class="muted">Qué harness, qué modelo y con cuánto esfuerzo de razonamiento se ejecuta cada fase al pulsar «Ejecutar». Sin modelo o sin esfuerzo, se usa el que tenga configurado el harness.
       El contenido de las memorias llega al proveedor del modelo: usa la herramienta de IA que autorice tu universidad.</p>
     ${c.error ? error(c.error) : ""}
-    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th><th>Harness</th><th>Modelo</th></tr></thead>
+    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th><th>Harness</th><th>Modelo</th><th>Esfuerzo</th></tr></thead>
       <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
-      ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${hv.modelos.map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
+      ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
       <button class="btn primary" type="submit">Guardar</button></form>
     <div class="bloque" style="margin-top:14px"><h3>Harnesses</h3><ul class="items">${Object.values(c.harnesses).map(hv =>
       `<li><b>${h(hv.nombre)}</b>. ${h(hv.nota)}${hv.problema ? `<p class="error">${h(hv.problema)}</p>` : ""}</li>`).join("")}</ul></div>`;
@@ -456,9 +463,16 @@ document.addEventListener("click", async e => {
     const t = b.dataset.texto ??= b.textContent; b.textContent = "Copiado"; setTimeout(() => b.textContent = t, 1500);
   });
 });
-document.addEventListener("change", e => {
-  const k = e.target.dataset.modelo;
-  if (k) document.querySelector(`[name="${k}.modelo"]`).setAttribute("list", `modelos-${e.target.value}`);
+document.addEventListener("input", e => {  // los niveles de esfuerzo dependen del harness y del modelo
+  const k = e.target.dataset.modelo || e.target.dataset.fase;
+  if (!k) return;
+  const harness = document.querySelector(`[name="${k}.harness"]`).value;
+  const modelo = document.querySelector(`[name="${k}.modelo"]`);
+  const esfuerzo = document.querySelector(`[name="${k}.esfuerzo"]`);
+  const lista = niveles(harness, modelo.value.trim());
+  modelo.setAttribute("list", `modelos-${harness}`);
+  esfuerzo.innerHTML = opcionesEsfuerzo(lista, lista.includes(esfuerzo.value) ? esfuerzo.value : "");
+  esfuerzo.disabled = !lista.length;
 });
 document.addEventListener("submit", async e => {
   if (e.target.id !== "ajustes") return;

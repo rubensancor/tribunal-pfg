@@ -30,7 +30,7 @@ Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemi
 
 ## Ejecutar desde el dashboard
 
-En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el harness y el modelo de cada fase; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
+En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el harness, el modelo y el esfuerzo de razonamiento de cada fase; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
 
 | Harness | Se lanza con | Permisos |
 |---|---|---|

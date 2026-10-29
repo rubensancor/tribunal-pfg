@@ -17,17 +17,27 @@ def falla(f, *args):
     raise AssertionError(f"{f.__name__}{args} debía fallar")
 
 
-assert server.validar_config({}) == {f: {"harness": "claude", "modelo": ""} for f in server.FASES}
+assert server.validar_config({}) == {f: {"harness": "claude", "modelo": "", "esfuerzo": ""} for f in server.FASES}
 assert server.validar_config({"leer-pfg": {"harness": "pi", "modelo": "openai-codex/gpt-6-luna"}})["leer-pfg"]["harness"] == "pi"
 assert "harness desconocido" in falla(server.validar_config, {"leer-pfg": {"harness": "bash"}})
 assert "modelo no válido" in falla(server.validar_config, {"leer-pfg": {"modelo": "--dangerously-skip-permissions"}})
 assert "modelo no válido" in falla(server.validar_config, {"leer-pfg": {"modelo": "opus; rm -rf /"}})
+assert server.validar_config({"leer-pfg": {"harness": "pi", "esfuerzo": "minimal"}})["leer-pfg"]["esfuerzo"] == "minimal"
+assert "Claude Code no admite el esfuerzo 'minimal'" in falla(server.validar_config, {"leer-pfg": {"esfuerzo": "minimal"}})
+assert server.validar_config({"leer-pfg": {"harness": "agy", "esfuerzo": "high"}})["leer-pfg"]["esfuerzo"] == "high"
+assert "por defecto" in falla(server.validar_config, {"leer-pfg": {"harness": "agy", "esfuerzo": "max"}})
+assert "claude-opus-4-6-thinking" in falla(server.validar_config, {"leer-pfg": {"harness": "agy", "modelo": "claude-opus-4-6-thinking", "esfuerzo": "low"}})
+assert "esfuerzo" in falla(server.validar_config, {"leer-pfg": {"esfuerzo": "--dangerously-skip-permissions"}})
 
-argv = server.comando_agente("claude", "opus", "usa la skill leer-pfg con el PFG demo")
+argv = server.comando_agente("claude", "opus", "high", "usa la skill leer-pfg con el PFG demo")
 assert argv[:2] == ["claude", "-p"] and argv[2].startswith("usa la skill leer-pfg con el PFG demo. ")
 assert "dontAsk" in argv and "Bash(uv run scripts/pfg.py:*)" in argv[-1] and argv[argv.index("--model") + 1] == "opus"
-assert "--model" not in server.comando_agente("pi", "", "x") and "--no-session" in server.comando_agente("pi", "", "x")
-assert server.comando_agente("agy", "m", "x")[-2:] == ["--model", "m"]
+assert argv[argv.index("--effort") + 1] == "high"
+assert "--model" not in server.comando_agente("pi", "", "", "x") and "--no-session" in server.comando_agente("pi", "", "", "x")
+assert "--thinking" not in server.comando_agente("pi", "", "", "x")
+assert server.comando_agente("pi", "", "low", "x")[-2:] == ["--thinking", "low"]
+assert server.comando_agente("agy", "m", "", "x")[-2:] == ["--model", "m"]
+assert server.comando_agente("agy", "m", "max", "x")[-4:] == ["--model", "m", "--effort", "max"]
 
 assert server.origen_local("127.0.0.1:8765", None, 8765)
 assert server.origen_local("localhost:8765", "http://localhost:8765", 8765)
