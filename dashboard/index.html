@@ -175,7 +175,13 @@ form.ajustes .btn { margin-top: 12px; }
 .anadir-cols .btn { justify-self: start; }
 .soltar { border: 2px dashed var(--line); border-radius: 10px; padding: 22px 12px; text-align: center; color: var(--muted); }
 .soltar .btn { margin-top: 8px; }
-.errores-url { margin: 0; font-size: 13px; color: var(--bad); overflow-wrap: anywhere; }
+.descargas { display: grid; gap: 6px; font-size: 13px; }
+.descargas p { margin: 0; }
+.descargas ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-height: 24em; overflow-y: auto; }
+.descargas li { display: grid; overflow-wrap: anywhere; }
+.descargas .url { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.descargas .fallida .estado { color: var(--bad); }
+.descargas .hecha .estado { color: var(--ok); }
 .acciones-fila { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; font-size: 13px; }
 .acciones-fila .btn.peligro { color: var(--bad); }
 #confirmar ul:empty { display: none; }
@@ -623,7 +629,19 @@ function vistaGrados(gs) {
         <div class="abajo"><button class="btn primary" type="submit">Crear grado</button></div></form></div>`;
 }
 
-let descarga = {gid: null, errores: [], en_curso: false};  // la última descarga de URL, que sobrevive al repintado
+let rapido = false;  // hay URL en cola o descargando: se repinta cada segundo
+const ESTADO_URL = {en_cola: () => "En cola", descargando: () => "Descargando…",
+  hecha: x => `Añadida → ${h(x.slug)}`, fallida: x => `Error: ${h(x.error)}`};
+function vistaDescargas(ds) {
+  if (!ds.length) return "";
+  const n = e => ds.filter(x => x.estado === e).length, i = ds.findIndex(x => x.estado === "descargando");
+  rapido = n("en_cola") + n("descargando") > 0;
+  const resumen = [`${n("hecha")} de ${ds.length} descargadas`, n("fallida") && `${n("fallida")} con error`,
+    i >= 0 && `descargando la ${i + 1}.ª`].filter(Boolean).join(" · ");
+  return `<div class="descargas" role="region" aria-label="Progreso de las URL"><p>${resumen}</p>
+    <ul tabindex="0" aria-label="Estado de cada URL">${ds.map(x => `<li class="${x.estado}"><span class="url">${h(x.url)}</span>
+      <span class="estado">${ESTADO_URL[x.estado](x)}</span></li>`).join("")}</ul></div>`;
+}
 function vistaUnGrado(g) {
   const sin = g.programas - g.leidos;
   const fila = a => {
@@ -636,7 +654,6 @@ function vistaUnGrado(g) {
         : ts.length ? `<ul class="items">${ts.map(t => `<li><b>${h(t.id)}</b> ${h(t.texto)}</li>`).join("")}</ul>`
         : `<p class="muted">La guía no tiene contenidos: esta asignatura no cuenta en el contraste.</p>`}${pie}</div></details>`;
   };
-  const errores = descarga.gid === g.id ? descarga.errores : [];
   return `<nav class="crumbs"><a href="#grados">← Grados</a></nav>
     <div class="det-head"><div><h1>${h(g.nombre)}</h1>
       <p class="resumen"><b>${g.leidos}</b> de <b>${g.programas}</b> programas leídos${sin ? ` · ${sin === 1 ? "el que falta se leerá" : `los ${sin} restantes se leerán`} con el próximo PFG de este grado` : ""}${
@@ -647,8 +664,8 @@ function vistaUnGrado(g) {
         <div><b>Archivos</b><div class="soltar">Suelta aquí PDF o .txt<br><button class="btn" type="button" data-elegir-programas>Elegir archivos</button></div></div>
         <form id="urls"><label for="urls-texto"><b>URL de las guías</b></label>
           <textarea id="urls-texto" data-conservar placeholder="Una URL por línea"></textarea>
-          <button class="btn" type="submit"${descarga.en_curso ? " disabled" : ""}>${descarga.en_curso ? "Descargando…" : "Descargar"}</button>
-          ${errores.length ? `<ul class="items errores-url" aria-label="URL que no se han podido añadir">${errores.map(e => `<li>${h(e.url)}: ${h(e.error)}</li>`).join("")}</ul>` : ""}</form>
+          <button class="btn" type="submit">Descargar</button>
+          ${vistaDescargas(lista(g.descargas))}</form>
         <form id="pegar"><label for="pegar-texto"><b>Pegar texto</b></label>
           <input id="pegar-nombre" data-conservar placeholder="Nombre (opcional)" aria-label="Nombre del programa (opcional)" autocomplete="off">
           <textarea id="pegar-texto" data-conservar placeholder="Pega aquí el texto de una guía"></textarea>
@@ -726,6 +743,7 @@ async function cargar() {
   const campos = mismaVista ? [...document.querySelectorAll("#main [data-conservar]")].map(c => [c.id, c.value]) : [];
   const foco = mismaVista && document.activeElement?.closest("#main") ? document.activeElement.id : null;
   const datos = r.ok ? JSON.parse(txt) : null;
+  rapido = false;
   $("#main").innerHTML = r.status === 404 && grados ? vacio("Ese grado no existe", `<p><a href="#grados">Volver a los grados</a></p>`)
     : r.status === 404 && id ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
     : !r.ok ? vacio("El dashboard no ha podido cargar esta página", `<p>${h(JSON.parse(txt || "{}").error || "error " + r.status)}.
@@ -967,16 +985,8 @@ document.addEventListener("submit", async e => {
     e.preventDefault();
     const urls = $("#urls-texto").value.split("\n").map(u => u.trim()).filter(Boolean);
     if (!urls.length) return aviso("Pega antes alguna URL, una por línea.");
-    descarga = {gid, errores: [], en_curso: true};
-    pintado = ""; cargar();
-    const r = await fetch(`/api/grados/${gid}/urls`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({urls})}).catch(() => null);
-    const res = await r?.json().catch(() => null);
-    descarga = {gid, errores: r?.ok ? res.filter(x => x.error) : [], en_curso: false};
-    if (!r?.ok) aviso(res?.error || "No se ha podido descargar.");
-    else {
-      if (gradoActual() === gid) $("#urls-texto").value = descarga.errores.map(x => x.url).join("\n");  // quedan las que fallaron, para corregirlas
-      aviso(`${res.length - descarga.errores.length} de ${res.length} ${res.length === 1 ? "URL añadida" : "URL añadidas"}.`);
-    }
+    if (!await post(`/api/grados/${gid}/urls`, {urls})) return;
+    $("#urls-texto").value = "";
     pintado = ""; return cargar();
   }
   if (e.target.id !== "ajustes") return;
@@ -1274,7 +1284,7 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("mousedown", e => { if (!e.target.closest("#pop, #hojas")) $("#pop").hidden = true; });
 
-setInterval(() => document.hidden || cargar(), 4000);
+(function latir() { setTimeout(async () => { try { if (!document.hidden) await cargar(); } finally { latir(); } }, rapido ? 1000 : 4000); })();
 cargar();
 </script>
 </body>

@@ -116,6 +116,7 @@ with tempfile.TemporaryDirectory() as tmp:
         p.mkdir()
         (p / "memoria.pdf").write_bytes(b"%PDF")
     threading.Thread(target=server.preparar_cola, daemon=True).start()
+    threading.Thread(target=server.descargar_cola, daemon=True).start()
 
     def preparar(*dirs, hasta):
         for p in dirs:
@@ -275,15 +276,34 @@ with tempfile.TemporaryDirectory() as tmp:
     assert pedir("/pfgs/notas/paginas/indice.json")[0] == 200
     assert pedir("/pfgs/notas/paginas/p3.png")[0] == 404 and pedir("/pfgs/notas/paginas/../memoria.pdf")[0] == 404
 
-    # Programas del grado. Las guías se descargan de un servidor local, no de internet.
+    # Programas del grado. Las guías se descargan de un servidor local, no de internet. La de Deusto tarda 2 s.
+    simultaneas, pedidas = {"ahora": 0, "max": 0}, []
+    contar = threading.Lock()
+
     class Guias(BaseHTTPRequestHandler):
         def do_GET(self):
-            guia = "<p>Contenidos</p><p>TEMA 1: Redes</p><p>Estrategia de enseñanza</p>".encode("iso-8859-15")
-            cuerpo = {"/doa/look%5bconpub%5dMostrarPubGuiaDocAs": guia, "/guia": guia,
-                      "/grande": b"x" * (server.MAX_PROGRAMA + 1), "/guia.pdf": b"%PDF-1.4 guia"}.get(urllib.parse.urlparse(self.path).path)
-            self.send_response(200 if cuerpo else 404)
-            self.end_headers()
-            self.wfile.write(cuerpo or b"no")
+            ruta = urllib.parse.urlparse(self.path).path
+            with contar:
+                pedidas.append(ruta)
+                simultaneas["ahora"] += 1
+                simultaneas["max"] = max(simultaneas.values())
+            try:
+                if ruta in ("/a-ftp", "/a-file", "/a-guia"):
+                    self.send_response(302)
+                    self.send_header("Location", {"/a-ftp": "ftp://127.0.0.1/guia", "/a-file": "file:///etc/passwd", "/a-guia": "/guia"}[ruta])
+                    self.end_headers()
+                    return
+                if ruta.startswith("/doa/"):
+                    time.sleep(2)
+                guia = "<p>Contenidos</p><p>TEMA 1: Redes</p><p>Estrategia de enseñanza</p>".encode("iso-8859-15")
+                cuerpo = {"/doa/look%5bconpub%5dMostrarPubGuiaDocAs": guia, "/guia": guia,
+                          "/grande": b"x" * (server.MAX_PROGRAMA + 1), "/guia.pdf": b"%PDF-1.4 guia"}.get(ruta)
+                self.send_response(200 if cuerpo else 404)
+                self.end_headers()
+                self.wfile.write(cuerpo or b"no")
+            finally:
+                with contar:
+                    simultaneas["ahora"] -= 1
 
         def log_message(self, *args):
             pass
@@ -321,12 +341,33 @@ with tempfile.TemporaryDirectory() as tmp:
     assert server.resumen(d)["paso"] == "grado-pfg", "con programas, tras la lectura toca contrastar"
     assert server.detalle(d)["contrastable"] and not server.detalle(d)["desfase"]
 
+    deusto = f"{web}/doa/look%5bconpub%5dMostrarPubGuiaDocAs"
+
+    def descargas(gid, hasta=lambda ds: all(x["estado"] in ("hecha", "fallida") for x in ds)):
+        vistas = []
+        for _ in range(200):
+            ds = json.loads(pedir(f"/api/grados/{gid}")[1])["descargas"]
+            vistas.append([x["estado"] for x in ds])
+            assert vistas[-1].count("descargando") <= 1, vistas[-1]
+            if hasta(ds):
+                return ds, vistas
+            time.sleep(0.05)
+        raise AssertionError(vistas[-1])
+
+    antes = time.monotonic()
     codigo, cuerpo = pedir(f"/api/grados/{g.name}/urls", {"urls": [
-        f"{web}/doa/look%5bconpub%5dMostrarPubGuiaDocAs?_codAsignatura=145320&_anyoAcad=2026", f"{web}/no-existe",
-        f"{web}/grande", f"{web}/guia.pdf", "file:///etc/passwd", ""]})
-    r = json.loads(cuerpo)
-    assert codigo == 200 and [x.get("slug") for x in r] == ["145320", None, None, "guia", None], r
+        f"{deusto}?_codAsignatura=145320&_anyoAcad=2026", f"{web}/no-existe", f"{web}/grande", f"{web}/guia.pdf",
+        "file:///etc/passwd", f"{web}/a-ftp", f"{web}/a-file", ""]})
+    assert codigo == 202 and time.monotonic() - antes < 1, "responde sin esperar a la guía de 2 s"
+    assert [x["estado"] for x in json.loads(cuerpo)] == ["en_cola"] * 7
+    r, vistas = descargas(g.name)
+    assert ["descargando"] + ["en_cola"] * 6 in vistas, "mientras baja la lenta, las demás esperan"
+    assert [x["estado"] for x in r] == ["hecha", "fallida", "fallida", "hecha", "fallida", "fallida", "fallida"], r
+    assert [x.get("slug") for x in r] == ["145320", None, None, "guia", None, None, None], r
     assert "404" in r[1]["error"] and "5 MB" in r[2]["error"] and "http o https" in r[4]["error"]
+    assert "redirige a ftp://127.0.0.1/guia" in r[5]["error"] and "redirige a file:///etc/passwd" in r[6]["error"], r
+    assert simultaneas["max"] == 1, "de una en una"
+    assert sorted(p.name for p in (g / "programas").iterdir()) == ["145320.html", "guia.pdf", "redes-ii.pdf", "sistemas-operativos.txt"]
     assert (g / "programas" / "145320.html").read_bytes().startswith(b"<p>Contenidos") and (g / "programas" / "guia.pdf").exists()
     assert json.loads((g / "grado.json").read_text())["fuentes"] == {"145320": r[0]["url"], "guia": f"{web}/guia.pdf"}
 
@@ -345,8 +386,10 @@ with tempfile.TemporaryDirectory() as tmp:
     assert codigo == 200 and cuerpo.startswith(b"<p>Contenidos")
     assert pedir(f"/grados/{g.name}/programas/../grado.json")[0] == 404
 
-    # Rehacer la ficha: misma asignatura, otra guía.
-    pedir(f"/api/grados/{g.name}/urls", {"urls": [f"{web}/guia?_codAsignatura=145320"]})
+    # Rehacer la ficha: misma asignatura, otra guía, tras una redirección http.
+    codigo, cuerpo = pedir(f"/api/grados/{g.name}/urls", {"urls": [f"{web}/a-guia?_codAsignatura=145320"]})
+    assert codigo == 202 and len(json.loads(cuerpo)) == 1, "las descargas terminadas se olvidan"
+    assert [x["estado"] for x in descargas(g.name)[0]] == ["hecha"]
     assert not (g / "asignaturas" / "145320.json").exists(), "un programa sustituido pierde su ficha"
     (g / "asignaturas" / "145320.json").write_text(json.dumps(ficha))
     assert pedir(f"/api/grados/{g.name}/programas/guia/borrar", {})[0] == 200
@@ -398,7 +441,18 @@ with tempfile.TemporaryDirectory() as tmp:
         time.sleep(0.05)
     assert server.resumen(d)["estado"] == "clasificadas" and (d / "contraste.json").exists()
 
+    # Borrar el grado con descargas pendientes: la que baja y las que esperan fallan sin guardar nada.
+    pdfs = pedidas.count("/guia.pdf")
+    assert pedir(f"/api/grados/{g.name}/urls", {"urls": [f"{deusto}?_codAsignatura=999", f"{web}/guia.pdf"]})[0] == 202
+    descargas(g.name, lambda ds: ds[0]["estado"] == "descargando")
     assert pedir(f"/api/grados/{g.name}/borrar", {})[0] == 200 and not g.exists()
+    for _ in range(100):
+        if server.DESCARGAS[g.name][0]["estado"] != "descargando":
+            break
+        time.sleep(0.05)
+    assert [(x["estado"], x["error"]) for x in server.DESCARGAS[g.name]] == [("fallida", "este grado ya no existe")] * 2
+    assert not g.exists(), "la descarga en curso no recrea el grado"
+    assert pedidas.count("/guia.pdf") == pdfs, "las que esperaban ni se piden"
     assert json.loads(pedir("/api/grados")[1]) == [] and server.resumen(d)["paso"] is None
     guias.shutdown()
     srv.shutdown()
