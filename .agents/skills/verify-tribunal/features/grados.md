@@ -8,7 +8,7 @@ En **Grados** el docente crea un grado por titulación y le añade las guías do
 - `grado-crear`: «Nuevo grado» con el nombre exacto de la titulación lleva a `#grados/<gid>`. Un nombre repetido da `ya hay un grado con ese nombre`.
 - `programa-archivo`: «Elegir archivos» o soltar PDF o `.txt` en la página del grado. Se guarda en `grados/<gid>/programas/<slug>.<ext>`.
 - `programa-url`: cuadro «URL de las guías», una por línea, y «Descargar». El cuadro se vacía al momento y debajo sale la región «Progreso de las URL»: un resumen (`3 de 8 descargadas · 1 con error · descargando la 5.ª`) y una fila por URL con `En cola`, `Descargando…`, `Añadida → <slug>` o `Error: <motivo>`. El servidor las baja en segundo plano, de una en una, y la página se refresca cada segundo mientras queden pendientes; las asignaturas aparecen según se guardan. Las filas terminadas siguen hasta el siguiente «Descargar» o hasta reiniciar el servidor. Una redirección a algo que no sea http o https falla con `redirige a <destino>, que no es una URL http o https`. `_codAsignatura` da el slug: la misma asignatura sustituye a la anterior y borra su ficha.
-- `programa-pegado`: «Pegar texto» con «Nombre (opcional)». Sin nombre, el slug sale de la primera línea.
+- `programa-pegado`: «Pegar texto» con «Nombre del programa (opcional)». Sin nombre, el slug sale de la primera línea.
 - `asignaturas`: una fila desplegable por programa. Leída: `curso.º · carácter · N temas · origen`, los temas al desplegar, «Ver fuente» y «Borrar». Sin leer: `sin leer · origen`.
 - `paso-contrastar`: tras `fase leido`, con algún grado con programas, la tarjeta ofrece «Contrastar con el grado con …» y la instrucción `usa la skill grado-pfg con el PFG <id>`. Sin grados, el paso sigue siendo `preguntas-pfg`.
 - `pestana-grado`: «Grado · N más allá». La línea «Comparado con <grado> (N programas). Identificado en la portada (pág. i): «…». Es un mapa para el tribunal, no una valoración.», el bloque «Va más allá de lo que se imparte» y después «Aplica lo que se imparte». Cada entrada lleva su enlace de página, una etiqueta `asignatura · tema` con el texto del tema al pasar el ratón y, si la asignatura es optativa, la etiqueta `optativa`.
@@ -29,7 +29,7 @@ Preconditions:
 
 - **Crear.** `page.get_by_role("link", name="Grados").click()`, `page.get_by_role("textbox", name="Nuevo grado").fill("Grado en Ingeniería Informática")` y «Crear grado». La URL acaba en `#grados/grado-en-ingenieria-informatica` y existe `grados/<gid>/grado.json` en `$($V estado app)`.
 - **Archivo.** `with page.expect_file_chooser() as fc: page.get_by_role("button", name="Elegir archivos").click()` y `fc.value.set_files([...])`. Estado `N programas añadidos.`.
-- **Pegado.** Rellena «Nombre (opcional)» y el cuadro «Pegar texto» y pulsa «Añadir».
+- **Pegado.** Rellena «Nombre del programa (opcional)» y el cuadro «Pegar texto» y pulsa «Añadir».
 - **URL.** Rellena «URL de las guías» con varias líneas, una de ellas mala, y pulsa «Descargar». Sirve las guías con un retraso por petición para capturar `En cola` y `Descargando…` mientras la página sigue respondiendo. Comprueba `get_by_role("region", name="Progreso de las URL")`, los errores y `grados/<gid>/grado.json` (`fuentes`).
 - **CLI.** `uv run "$($V estado app)/scripts/pfg.py" programas <gid>` sale con 2 y lista una línea `texto ficha` por programa.
 - **Fichas.** `$V fichas <gid>` ejecuta esa misma CLI, escribe fichas `[sintético]` (la última, optativa) y sale con el código de `validar-grado`. La página del grado pasa a `N de N programas leídos`.

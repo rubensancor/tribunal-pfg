@@ -535,7 +535,7 @@ def poner_programa(g, s, ext, datos, fuente=None):
 def guardar_programa(g, nombre, datos):
     """Un PDF o un .txt subido, o un texto pegado (llega como .txt)."""
     ext = Path(nombre).suffix.lower()
-    if ext not in ORIGEN:
+    if ext not in (".pdf", ".txt"):  # .html solo entra descargando una URL
         raise ValueError("el programa debe ser un PDF o un .txt")
     return poner_programa(g, slug(Path(nombre).stem, "programa"), ext, datos)
 
@@ -646,6 +646,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(cuerpo)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(cuerpo)
 
