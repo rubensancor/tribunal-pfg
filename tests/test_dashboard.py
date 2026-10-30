@@ -337,6 +337,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert subir("Redes II.pdf", b"%PDF-1.4 redes") == (201, {"slug": "redes-ii"})
     assert subir("Sistemas Operativos.txt", "Tema 1. Procesos".encode()) == (201, {"slug": "sistemas-operativos"})
     assert subir("falso.pdf", b"hola")[0] == 409 and subir("guia.docx", b"PK")[0] == 409
+    assert subir("pagina.html", b"<script>fetch('/api/pfgs')</script>") == (409, {"error": "el programa debe ser un PDF o un .txt"})
     assert sorted(p.name for p in (g / "programas").iterdir()) == ["redes-ii.pdf", "sistemas-operativos.txt"]
     assert server.resumen(d)["paso"] == "grado-pfg", "con programas, tras la lectura toca contrastar"
     assert server.detalle(d)["contrastable"] and not server.detalle(d)["desfase"]
@@ -384,6 +385,8 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (codigo, cuerpo) == (200, "Tema 1. Procesos".encode())
     codigo, cuerpo = pedir(f"/grados/{g.name}/programas/145320.html")
     assert codigo == 200 and cuerpo.startswith(b"<p>Contenidos")
+    with urllib.request.urlopen(f"{base}/grados/{g.name}/programas/145320.html") as r:
+        assert r.headers["X-Content-Type-Options"] == "nosniff", "el navegador no debe adivinar HTML en el texto plano"
     assert pedir(f"/grados/{g.name}/programas/../grado.json")[0] == 404
 
     # Rehacer la ficha: misma asignatura, otra guía, tras una redirección http.
