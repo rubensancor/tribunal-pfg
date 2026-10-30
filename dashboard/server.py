@@ -533,10 +533,11 @@ def poner_programa(g, s, ext, datos, fuente=None):
 
 
 def guardar_programa(g, nombre, datos):
-    """Un PDF o un .txt subido, o un texto pegado (llega como .txt)."""
+    """Un PDF, un .txt o una página guardada desde el navegador subidos, o un texto pegado (llega como .txt)."""
     ext = Path(nombre).suffix.lower()
+    ext = ".html" if ext == ".htm" else ext
     if ext not in ORIGEN:
-        raise ValueError("el programa debe ser un PDF o un .txt")
+        raise ValueError("el programa debe ser un PDF, un .txt o un .html")
     return poner_programa(g, slug(Path(nombre).stem, "programa"), ext, datos)
 
 
@@ -646,6 +647,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(cuerpo)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(cuerpo)
 
@@ -693,7 +695,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.responder(200, [resumen_grado(g) for g in gs])
         if g := self.grado(ruta, r"/api/grados/([a-z0-9-]+)"):
             return self.responder(200, detalle_grado(g))
-        # Nunca como HTML: una página descargada ejecutaría sus scripts con acceso a la API del dashboard.
+        # Nunca como HTML: una página subida o descargada ejecutaría sus scripts con acceso a la API del dashboard.
         if (g := self.grado(ruta, r"/grados/([a-z0-9-]+)/programas/([a-z0-9-]+\.(?:pdf|txt|html))")) \
                 and (f := g / "programas" / ruta.rsplit("/", 1)[1]).exists():
             if f.suffix == ".pdf":

@@ -49,7 +49,7 @@ Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemi
 
 En **Grados → Nuevo grado** escribe el nombre exacto de la titulación, como aparece en la portada de las memorias, por ejemplo «Grado en Ingeniería Informática». Un doble grado es un grado aparte, con su propia lista de asignaturas. Después añade las guías docentes de sus asignaturas en el mismo panel:
 
-- **Archivos**: suelta o elige PDF o `.txt`.
+- **Archivos**: suelta o elige PDF, `.txt` o `.html` (la página de la guía guardada desde el navegador).
 - **URL**: una por línea. Al pulsar **Descargar** el dashboard las pone en cola y las descarga en segundo plano, de una en una (http o https también tras las redirecciones, 20 s y 5 MB como máximo por guía). Debajo muestra el estado de cada URL y el motivo de las que fallen. Si la URL trae `_codAsignatura`, como las de Deusto, esa asignatura sustituye a la anterior con el mismo código.
 - **Pegar texto**: con un nombre opcional; sin nombre, se usa la primera línea.
 
