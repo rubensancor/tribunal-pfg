@@ -337,8 +337,16 @@ with tempfile.TemporaryDirectory() as tmp:
     assert subir("Redes II.pdf", b"%PDF-1.4 redes") == (201, {"slug": "redes-ii"})
     assert subir("Sistemas Operativos.txt", "Tema 1. Procesos".encode()) == (201, {"slug": "sistemas-operativos"})
     assert subir("falso.pdf", b"hola")[0] == 409 and subir("guia.docx", b"PK")[0] == 409
-    assert subir("pagina.html", b"<script>fetch('/api/pfgs')</script>") == (409, {"error": "el programa debe ser un PDF o un .txt"})
-    assert sorted(p.name for p in (g / "programas").iterdir()) == ["redes-ii.pdf", "sistemas-operativos.txt"]
+    pagina = b"<p>Tema 1. Consultas</p><script>fetch('/api/pfgs')</script>"
+    for nombre in ("guia.html", "guia.htm"):
+        assert subir(nombre, pagina) == (201, {"slug": "guia"}), nombre
+        assert (g / "programas" / "guia.html").read_bytes() == pagina, nombre
+        dg = json.loads(pedir(f"/api/grados/{g.name}")[1])
+        assert [a["origen"] for a in dg["asignaturas"] if a["slug"] == "guia"] == ["HTML"], dg
+        with urllib.request.urlopen(f"{base}/grados/{g.name}/programas/guia.html") as r:
+            assert r.headers["Content-Type"] == "text/plain; charset=utf-8" and r.read() == pagina
+            assert r.headers["X-Content-Type-Options"] == "nosniff", "una página subida nunca se ejecuta como HTML"
+    assert sorted(p.name for p in (g / "programas").iterdir()) == ["guia.html", "redes-ii.pdf", "sistemas-operativos.txt"]
     assert server.resumen(d)["paso"] == "grado-pfg", "con programas, tras la lectura toca contrastar"
     assert server.detalle(d)["contrastable"] and not server.detalle(d)["desfase"]
 
