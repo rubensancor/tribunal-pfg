@@ -372,7 +372,7 @@ aplicarTema();
       <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
     </div>
     <input type="file" id="archivo" accept="application/pdf,.pdf" multiple hidden>
-    <input type="file" id="archivo-programas" accept="application/pdf,.pdf,text/plain,.txt" multiple hidden>
+    <input type="file" id="archivo-programas" accept="application/pdf,.pdf,text/plain,.txt,text/html,.html,.htm" multiple hidden>
   </div>
 </header>
 <main class="wrap" id="main" aria-live="polite"></main>
@@ -661,7 +661,7 @@ function vistaUnGrado(g) {
       <div class="botones"><button class="btn peligro" type="button" data-borrar-grado="${g.id}" data-titulo="${h(g.nombre)}">Borrar grado</button></div></div>
     <section class="bloque anadir" aria-labelledby="anadir-titulo"><h3 id="anadir-titulo">Añadir programas</h3>
       <div class="anadir-cols">
-        <div><b>Archivos</b><div class="soltar">Suelta aquí PDF o .txt<br><button class="btn" type="button" data-elegir-programas>Elegir archivos</button></div></div>
+        <div><b>Archivos</b><div class="soltar">Suelta aquí PDF, .txt o .html<br><button class="btn" type="button" data-elegir-programas>Elegir archivos</button></div></div>
         <form id="urls"><label for="urls-texto"><b>URL de las guías</b></label>
           <textarea id="urls-texto" data-conservar placeholder="Una URL por línea"></textarea>
           <button class="btn" type="submit">Descargar</button>
@@ -795,7 +795,7 @@ async function subirProgramas(gid, files) {
   let n = 0;
   const errores = [];
   for (const f of [...files]) {
-    if (!/\.(pdf|txt)$/i.test(f.name)) { errores.push(`${f.name}: no es un PDF ni un .txt.`); continue; }
+    if (!/\.(pdf|txt|html?)$/i.test(f.name)) { errores.push(`${f.name}: no es un PDF, un .txt ni un .html.`); continue; }
     if (f.size > MAX_PROGRAMA) { errores.push(`${f.name}: ocupa más de 5 MB.`); continue; }
     try {
       const r = await fetch(`/api/grados/${gid}/programas?nombre=${encodeURIComponent(f.name)}`, {method: "POST", body: f});

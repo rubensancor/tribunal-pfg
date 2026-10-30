@@ -1,12 +1,12 @@
 # Programas del grado
 
-En **Grados** el docente crea un grado por titulación y le añade las guías docentes de sus asignaturas: archivos PDF o `.txt`, URL (una por línea, que el dashboard descarga) o texto pegado. Cada grado lista sus asignaturas, leídas o sin leer. Cuando hay algún grado con programas, un PFG leído pasa a «Contrastar con el grado» antes de las preguntas, y su detalle gana la pestaña «Grado · N más allá», con lo que va más allá de lo que se imparte y lo que aplica, cada cosa con su página.
+En **Grados** el docente crea un grado por titulación y le añade las guías docentes de sus asignaturas: archivos PDF, `.txt` o `.html`, URL (una por línea, que el dashboard descarga) o texto pegado. Cada grado lista sus asignaturas, leídas o sin leer. Cuando hay algún grado con programas, un PFG leído pasa a «Contrastar con el grado» antes de las preguntas, y su detalle gana la pestaña «Grado · N más allá», con lo que va más allá de lo que se imparte y lo que aplica, cada cosa con su página.
 
 ## Sub-features
 
 - `grados-lista`: botón «Grados» de la cabecera (`#grados`). Una tarjeta por grado con su estado (`Sin programas`, `N sin leer` o `Leídos`), el número de programas y los PFG que lo usan, y la tarjeta «Nuevo grado».
 - `grado-crear`: «Nuevo grado» con el nombre exacto de la titulación lleva a `#grados/<gid>`. Un nombre repetido da `ya hay un grado con ese nombre`.
-- `programa-archivo`: «Elegir archivos» o soltar PDF o `.txt` en la página del grado. Se guarda en `grados/<gid>/programas/<slug>.<ext>`.
+- `programa-archivo`: «Elegir archivos» o soltar PDF, `.txt` o `.html` (`.htm` incluido) en la página del grado. Se guarda en `grados/<gid>/programas/<slug>.<ext>`, con `.htm` como `.html`.
 - `programa-url`: cuadro «URL de las guías», una por línea, y «Descargar». El cuadro se vacía al momento y debajo sale la región «Progreso de las URL»: un resumen (`3 de 8 descargadas · 1 con error · descargando la 5.ª`) y una fila por URL con `En cola`, `Descargando…`, `Añadida → <slug>` o `Error: <motivo>`. El servidor las baja en segundo plano, de una en una, y la página se refresca cada segundo mientras queden pendientes; las asignaturas aparecen según se guardan. Las filas terminadas siguen hasta el siguiente «Descargar» o hasta reiniciar el servidor. Una redirección a algo que no sea http o https falla con `redirige a <destino>, que no es una URL http o https`. `_codAsignatura` da el slug: la misma asignatura sustituye a la anterior y borra su ficha.
 - `programa-pegado`: «Pegar texto» con «Nombre del programa (opcional)». Sin nombre, el slug sale de la primera línea.
 - `asignaturas`: una fila desplegable por programa. Leída: `curso.º · carácter · N temas · origen`, los temas al desplegar, «Ver fuente» y «Borrar». Sin leer: `sin leer · origen`.
