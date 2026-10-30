@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Dashboard local del tribunal PFG. Solo stdlib. Uso: uv run dashboard/server.py [puerto]"""
+import http.client
 import json
 import os
 import re
@@ -11,20 +12,28 @@ import sys
 import threading
 import time
 import unicodedata
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 RAIZ = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(RAIZ / "scripts"))
+import pfg  # noqa: E402  sin pymupdf: solo lo importan sus funciones de PDF
+
 PFGS = RAIZ / "pfgs"
+GRADOS = RAIZ / "grados"
 CATEGORIAS = RAIZ / "config" / "categorias.json"
 CONFIG_EJECUCION = RAIZ / "config" / "ejecucion.json"
 INDEX = Path(__file__).resolve().parent / "index.html"
 MAX_SUBIDA = 100 * 1024 * 1024
+MAX_PROGRAMA = 5 * 1024 * 1024
+MAX_URLS = 100
+ORIGEN = {".pdf": "PDF", ".txt": "Texto", ".html": "HTML"}  # las mismas extensiones que pfg.CONVERSORES
 
-FASES = {"leer-pfg": "Lectura de la memoria", "preguntas-pfg": "Preguntas para la defensa",
-         "anotaciones-pfg": "Respuestas a tus notas"}
+FASES = {"leer-pfg": "Lectura de la memoria", "grado-pfg": "Contraste con el grado",
+         "preguntas-pfg": "Preguntas para la defensa", "anotaciones-pfg": "Respuestas a tus notas"}
 # Cada tipo de nota vive en el archivo de quien la lee. Las personales van aparte para que ningún agente las abra.
 TIPOS = {"personal": "notas-personales.json", "agente": "anotaciones.json", "preguntas": "anotaciones.json"}
 AID = re.compile(r"[a-z0-9]{4,32}")
@@ -204,6 +213,25 @@ def borrar_anotacion(d, aid):
                 escribir(d / a, notas)
 
 
+def programas_de(g):
+    return [p for p in sorted((g / "programas").glob("*")) if p.suffix in pfg.CONVERSORES and not p.name.startswith(".")]
+
+
+def hay_programas():
+    return GRADOS.exists() and any(programas_de(g) for g in GRADOS.iterdir() if (g / "grado.json").exists())
+
+
+def cambiado(g):
+    """Última vez que cambiaron los programas o las fichas, incluidos los borrados (cambian la carpeta)."""
+    t = 0
+    for r in [g / "programas", g / "asignaturas", *(g / "programas").glob("*"), *(g / "asignaturas").glob("*")]:
+        try:
+            t = max(t, r.stat().st_mtime)
+        except FileNotFoundError:
+            pass
+    return t
+
+
 def resumen(d):
     """Estado deducido de los archivos que existen; nadie escribe un campo de estado."""
     cola = COLA.copy()  # sin el cerrojo: lanzar llama a resumen con él cogido
@@ -216,7 +244,8 @@ def resumen(d):
     elif (d / "preguntas.json").exists():
         estado, paso = "preguntas", "preguntas-pfg"
     elif analisis:
-        estado, paso = "leido", "preguntas-pfg"
+        # Un contraste con grado null también cuenta como hecho: sin grado identificado nada se queda atascado.
+        estado, paso = "leido", "grado-pfg" if hay_programas() and not (d / "contraste.json").exists() else "preguntas-pfg"
     elif indice:
         estado, paso = "leyendo", "leer-pfg"
     else:
@@ -290,13 +319,21 @@ def ejecucion(pfg_id, paso, con_log=False):
     if not e:
         return None
     codigo = e["proc"].poll()
-    avanzo = (not any(n["pendiente"] for n in anotaciones(PFGS / pfg_id)) if e["fase"] == "anotaciones-pfg"
-              else paso != e["fase"])
+    if e["fase"] == "anotaciones-pfg":
+        avanzo = not any(n["pendiente"] for n in anotaciones(PFGS / pfg_id))
+    elif e["fase"] == "grado-pfg":  # a demanda, el paso ya era otro antes de empezar
+        c = PFGS / pfg_id / "contraste.json"
+        avanzo = c.exists() and c.stat().st_mtime >= e["inicio"]
+    else:
+        avanzo = paso != e["fase"]
+    despues = None
+    if e["seguir"] and e["fase"] != "preguntas-pfg":
+        despues = FASES["grado-pfg" if e["fase"] == "leer-pfg" and hay_programas() else "preguntas-pfg"]
     estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
               else "terminada" if avanzo else "sin_avance")
     r = {"paso": e["fase"], "fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
          "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo,
-         "despues": FASES["preguntas-pfg"] if e["seguir"] and e["fase"] == "leer-pfg" else None}
+         "despues": despues}
     if con_log:
         with open(e["log"], "rb") as f:
             f.seek(max(f.seek(0, 2) - 6000, 0))
@@ -320,6 +357,11 @@ def lanzar(d, fase=None, seguir=False):
             fase = resumen(d)["paso"]
             if not fase:
                 raise ValueError("este PFG ya tiene todas las fases hechas")
+        elif fase == "grado-pfg":
+            if not (d / "analisis.json").exists():
+                raise ValueError("lee antes la memoria")
+            if not hay_programas():
+                raise ValueError("carga antes los programas de algún grado")
         elif fase != "anotaciones-pfg":
             raise ValueError(f"no se puede lanzar la fase {fase!r} a demanda")
         elif not any(n["pendiente"] for n in anotaciones(d)):
@@ -401,10 +443,28 @@ def origen_local(host, origen, puerto):
     return host in locales and (origen is None or origen in {f"http://{h}" for h in locales})
 
 
+def contraste_de(d):
+    """El grado con el que se contrastó un PFG y lo que la pestaña Grado necesita de su catálogo."""
+    c = leer(d / "contraste.json")
+    gid = objeto(leer(d / "grado.json")).get("grado")
+    g = GRADOS / gid if isinstance(gid, str) and re.fullmatch(r"[a-z0-9-]+", gid) else None
+    meta = objeto(leer(g / "grado.json")) if g else {}
+    usadas = {t.get("asignatura") for campo in ("aplica", "extiende") for e in lista(objeto(c).get(campo))
+              for t in lista(objeto(e).get("temas")) if isinstance(t, dict)}
+    cat = {s: {"asignatura": f.get("asignatura"), "caracter": f.get("caracter"),
+               "temas": {t.get("id"): t.get("texto") for t in lista(f.get("temas")) if isinstance(t, dict)}}
+           for s, f in (pfg.catalogo(g).items() if meta else []) if s in usadas and isinstance(f, dict)}
+    return {"grado": leer(d / "grado.json"), "contraste": c, "grado_nombre": meta.get("nombre"),
+            "grado_programas": len(programas_de(g)) if meta else 0, "catalogo": cat,
+            "desfase": bool(c and meta and cambiado(g) > (d / "contraste.json").stat().st_mtime),
+            "contrastable": hay_programas() and (d / "analisis.json").exists(),
+            "ejecutor_grado": HARNESSES[config_ejecucion()["grado-pfg"]["harness"]]["nombre"]}
+
+
 def detalle(d):
     indice = lista(leer(d / "secciones" / "indice.json"))
     r = resumen(d)
-    return {**r, "ejecucion": ejecucion(d.name, r["paso"], con_log=True), "indice": indice,
+    return {**r, **contraste_de(d), "ejecucion": ejecucion(d.name, r["paso"], con_log=True), "indice": indice,
             "lecturas": [leer(d / "secciones" / f"{s['n']:02d}.json") for s in indice],
             "analisis": leer(d / "analisis.json"), "preguntas": leer(d / "preguntas.json"),
             "clasificacion": leer(d / "clasificacion.json"), "categorias": leer(CATEGORIAS),
@@ -412,9 +472,13 @@ def detalle(d):
             "ejecutor_notas": HARNESSES[config_ejecucion()["anotaciones-pfg"]["harness"]]["nombre"]}
 
 
+def slug(texto, defecto, largo=60):
+    base = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", base).strip("-")[:largo] or defecto
+
+
 def nuevo_dir(nombre):
-    base = unicodedata.normalize("NFKD", Path(nombre).stem).encode("ascii", "ignore").decode().lower()
-    base = re.sub(r"[^a-z0-9]+", "-", base).strip("-")[:60] or "pfg"
+    base = slug(Path(nombre).stem, "pfg")
     for i in range(1, 1000):
         d = PFGS / (base if i == 1 else f"{base}-{i}")
         try:
@@ -423,6 +487,108 @@ def nuevo_dir(nombre):
         except FileExistsError:
             continue
     raise RuntimeError("demasiados PFG con el mismo nombre")
+
+
+def crear_grado(nombre):
+    nombre = nombre.strip() if isinstance(nombre, str) else ""
+    if not 0 < len(nombre) <= 200:
+        raise ValueError("escribe el nombre de la titulación, de 200 caracteres como máximo")
+    g = GRADOS / slug(nombre, "grado", 120)
+    with CERROJO:
+        if g.exists():
+            raise ValueError("ya hay un grado con ese nombre")
+        (g / "programas").mkdir(parents=True)
+        escribir(g / "grado.json", {"nombre": nombre, "fuentes": {}})
+    return g
+
+
+def poner_programa(g, s, ext, datos, fuente=None):
+    """Guarda el programa `s`. Si ya existía lo sustituye y borra su texto y su ficha: hay que volver a leerlo."""
+    if not datos:
+        raise ValueError("el programa está vacío")
+    if len(datos) > MAX_PROGRAMA:
+        raise ValueError("el programa ocupa más de 5 MB")
+    if ext == ".pdf" and not datos.startswith(b"%PDF"):
+        raise ValueError("no es un PDF")
+    with CERROJO:
+        meta = objeto(leer(g / "grado.json"))
+        if not meta:
+            raise ValueError("este grado ya no existe")
+        for viejo in [*(g / "programas").glob(f"{s}.*"), g / "textos" / f"{s}.txt", g / "asignaturas" / f"{s}.json"]:
+            viejo.unlink(missing_ok=True)
+        tmp = g / "programas" / f".{s}{ext}.tmp"
+        tmp.write_bytes(datos)
+        os.replace(tmp, g / "programas" / f"{s}{ext}")
+        fuentes = meta.setdefault("fuentes", {})
+        if fuente:
+            fuentes[s] = fuente
+        else:
+            fuentes.pop(s, None)
+        escribir(g / "grado.json", meta)
+    return s
+
+
+def guardar_programa(g, nombre, datos):
+    """Un PDF o un .txt subido, o un texto pegado (llega como .txt)."""
+    ext = Path(nombre).suffix.lower()
+    if ext not in ORIGEN:
+        raise ValueError("el programa debe ser un PDF o un .txt")
+    return poner_programa(g, slug(Path(nombre).stem, "programa"), ext, datos)
+
+
+def descargar_programa(g, url):
+    """Descarga una guía y la guarda con el código de la asignatura si la URL lo trae (Deusto: _codAsignatura)."""
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not u.netloc:
+        raise ValueError("solo se admiten URL http o https")
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "tribunal-pfg"}), timeout=20) as r:
+            datos = r.read(MAX_PROGRAMA + 1)
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        raise ValueError(f"no se ha podido descargar ({e})")
+    cod = parse_qs(u.query).get("_codAsignatura", [""])[0]
+    s = cod.lower() if re.fullmatch(r"[A-Za-z0-9-]{1,60}", cod) else slug(Path(u.path).stem or u.netloc, "programa")
+    return poner_programa(g, s, ".pdf" if datos.startswith(b"%PDF") else ".html", datos, url)
+
+
+def borrar_programa(g, s):
+    if not re.fullmatch(r"[a-z0-9-]+", s):
+        raise ValueError("programa no válido")
+    with CERROJO:
+        for viejo in [*(g / "programas").glob(f"{s}.*"), g / "textos" / f"{s}.txt", g / "asignaturas" / f"{s}.json"]:
+            viejo.unlink(missing_ok=True)
+        meta = objeto(leer(g / "grado.json"))
+        if meta.get("fuentes", {}).pop(s, None):
+            escribir(g / "grado.json", meta)
+
+
+def borrar_grado(g):
+    with CERROJO:
+        shutil.rmtree(g)
+
+
+def usan_grado(g):
+    dirs = [d for d in PFGS.iterdir() if (d / "memoria.pdf").exists()] if PFGS.exists() else []
+    return [{"id": d.name, "titulo": objeto(leer(d / "analisis.json")).get("titulo") or d.name}
+            for d in dirs if objeto(leer(d / "grado.json")).get("grado") == g.name]
+
+
+def resumen_grado(g):
+    progs = programas_de(g)
+    return {"id": g.name, "nombre": objeto(leer(g / "grado.json")).get("nombre", g.name), "programas": len(progs),
+            "leidos": sum((g / "asignaturas" / f"{p.stem}.json").exists() for p in progs), "pfgs": usan_grado(g)}
+
+
+def detalle_grado(g):
+    fuentes = objeto(leer(g / "grado.json")).get("fuentes") or {}
+    cat = pfg.catalogo(g)
+    asignaturas = [{"slug": p.stem, "origen": "URL" if p.stem in fuentes else ORIGEN[p.suffix],
+                    "fuente": fuentes.get(p.stem) or f"/grados/{g.name}/programas/{p.name}",
+                    "ficha": cat.get(p.stem) if isinstance(cat.get(p.stem), dict) else None} for p in programas_de(g)]
+    def orden(a):  # las leídas primero, por curso y nombre
+        f = a["ficha"] or {}
+        return not f, f.get("curso") if type(f.get("curso")) is int else 99, str(f.get("asignatura") or a["slug"])
+    return {**resumen_grado(g), "asignaturas": sorted(asignaturas, key=orden)}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -440,6 +606,11 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(patron, ruta)
         d = m and PFGS / m.group(1)
         return d if d and (d / "memoria.pdf").exists() else None
+
+    def grado(self, ruta, patron):
+        m = re.fullmatch(patron, ruta)
+        g = m and GRADOS / m.group(1)
+        return g if g and (g / "grado.json").exists() else None
 
     def local(self):
         if origen_local(self.headers.get("Host"), self.headers.get("Origin"), self.server.server_port):
@@ -470,6 +641,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.responder(200, sorted((resumen(d) for d in dirs), key=lambda r: -r["modificado"]))
         if d := self.pfg(ruta, r"/api/pfgs/([a-z0-9-]+)"):
             return self.responder(200, detalle(d))
+        if ruta == "/api/grados":
+            gs = sorted(g for g in GRADOS.iterdir() if (g / "grado.json").exists()) if GRADOS.exists() else []
+            return self.responder(200, [resumen_grado(g) for g in gs])
+        if g := self.grado(ruta, r"/api/grados/([a-z0-9-]+)"):
+            return self.responder(200, detalle_grado(g))
+        # Nunca como HTML: una página descargada ejecutaría sus scripts con acceso a la API del dashboard.
+        if (g := self.grado(ruta, r"/grados/([a-z0-9-]+)/programas/([a-z0-9-]+\.(?:pdf|txt|html))")) \
+                and (f := g / "programas" / ruta.rsplit("/", 1)[1]).exists():
+            if f.suffix == ".pdf":
+                return self.responder(200, f.read_bytes(), "application/pdf")
+            return self.responder(200, pfg.decodificar(f.read_bytes()).encode(), "text/plain; charset=utf-8")
         if d := self.pfg(ruta, r"/pfgs/([a-z0-9-]+)/memoria\.pdf"):
             return self.responder(200, (d / "memoria.pdf").read_bytes(), "application/pdf")
         if (d := self.pfg(ruta, r"/pfgs/([a-z0-9-]+)/paginas/(.+)")) and PAGINA.fullmatch(nombre := ruta.rsplit("/", 1)[1]) \
@@ -508,6 +690,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self.responder(200, {"ok": True})
             if url.path == "/api/cola/vaciar":
                 desencolar()
+                return self.responder(200, {"ok": True})
+            if url.path == "/api/grados":
+                raw = self.cuerpo_json()
+                return self.responder(201, {"id": crear_grado(raw.get("nombre") if isinstance(raw, dict) else None).name})
+            if g := self.grado(url.path, r"/api/grados/([a-z0-9-]+)/programas"):
+                n = int(self.headers.get("Content-Length") or 0)
+                if not 0 < n <= MAX_PROGRAMA:
+                    self.close_connection = True  # no leemos el cuerpo
+                    return self.responder(413, {"error": "el programa debe ocupar entre 1 byte y 5 MB"})
+                nombre = parse_qs(url.query).get("nombre", [""])[0]
+                return self.responder(201, {"slug": guardar_programa(g, nombre, self.rfile.read(n))})
+            if g := self.grado(url.path, r"/api/grados/([a-z0-9-]+)/urls"):
+                raw = self.cuerpo_json(200_000)
+                urls = [u.strip() for u in (raw.get("urls") if isinstance(raw, dict) else None) or [] if isinstance(u, str) and u.strip()]
+                if not 0 < len(urls) <= MAX_URLS:
+                    raise ValueError(f"pega entre 1 y {MAX_URLS} URL, una por línea")
+                resultados = []
+                for u in urls:  # de una en una: no saturar el servidor de la universidad
+                    try:
+                        resultados.append({"url": u, "slug": descargar_programa(g, u)})
+                    except ValueError as e:
+                        resultados.append({"url": u, "error": str(e)})
+                return self.responder(200, resultados)
+            if g := self.grado(url.path, r"/api/grados/([a-z0-9-]+)/programas/([a-z0-9-]+)/borrar"):
+                borrar_programa(g, url.path.split("/")[-2])
+                return self.responder(200, {"ok": True})
+            if g := self.grado(url.path, r"/api/grados/([a-z0-9-]+)/borrar"):
+                borrar_grado(g)
                 return self.responder(200, {"ok": True})
         except ValueError as e:
             return self.responder(409, {"error": str(e)})

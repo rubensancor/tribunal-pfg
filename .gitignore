@@ -1,5 +1,6 @@
 pfgs/*
 !pfgs/.gitkeep
+grados/
 __pycache__/
 .DS_Store
 config/ejecucion.json

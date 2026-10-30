@@ -1,0 +1,7 @@
+---
+description: Lee la guía docente de una asignatura ya pasada a texto (grados/<gid>/textos/<slug>.txt) y escribe su ficha en grados/<gid>/asignaturas/<slug>.json. Lo lanza la skill grado-pfg, una vez por programa.
+mode: subagent
+---
+
+Sigue al pie de la letra .agents/agents/lector-programa.md (ignora su cabecera YAML entre las líneas ---).
+Ese archivo es la fuente única de instrucciones para todos los harnesses.

@@ -2,10 +2,12 @@
 """Self-check del dashboard: fases con un agente falso y notas del lector. Uso: uv run tests/test_dashboard.py"""
 import json
 import sys
+from http.server import BaseHTTPRequestHandler
 import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -62,7 +64,7 @@ assert not server.origen_local("evil.example:8765", None, 8765), "DNS rebinding"
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
-    server.PFGS, server.CONFIG_EJECUCION = tmp / "pfgs", tmp / "ejecucion.json"
+    server.PFGS, server.CONFIG_EJECUCION, server.GRADOS = tmp / "pfgs", tmp / "ejecucion.json", tmp / "grados"
     agente = tmp / "agente"
     agente.write_text('#!/bin/sh\ncase "$2" in *salir-mal*) exit 3;; *dormir*) sleep 30;; esac\necho "hecho: $2"\n')
     agente.chmod(0o755)
@@ -272,6 +274,133 @@ with tempfile.TemporaryDirectory() as tmp:
     assert codigo == 200 and json.loads(cuerpo)["palabras"][1][4] == "latencia"
     assert pedir("/pfgs/notas/paginas/indice.json")[0] == 200
     assert pedir("/pfgs/notas/paginas/p3.png")[0] == 404 and pedir("/pfgs/notas/paginas/../memoria.pdf")[0] == 404
+
+    # Programas del grado. Las guías se descargan de un servidor local, no de internet.
+    class Guias(BaseHTTPRequestHandler):
+        def do_GET(self):
+            guia = "<p>Contenidos</p><p>TEMA 1: Redes</p><p>Estrategia de enseñanza</p>".encode("iso-8859-15")
+            cuerpo = {"/doa/look%5bconpub%5dMostrarPubGuiaDocAs": guia, "/guia": guia,
+                      "/grande": b"x" * (server.MAX_PROGRAMA + 1), "/guia.pdf": b"%PDF-1.4 guia"}.get(urllib.parse.urlparse(self.path).path)
+            self.send_response(200 if cuerpo else 404)
+            self.end_headers()
+            self.wfile.write(cuerpo or b"no")
+
+        def log_message(self, *args):
+            pass
+
+    guias = server.ThreadingHTTPServer(("127.0.0.1", 0), Guias)
+    threading.Thread(target=guias.serve_forever, daemon=True).start()
+    web = f"http://127.0.0.1:{guias.server_port}"
+
+    d = server.PFGS / "contrastar"
+    d.mkdir()
+    (d / "memoria.pdf").write_bytes(b"%PDF")
+    (d / "analisis.json").write_text(json.dumps({"titulo": "T"}))
+    assert server.resumen(d)["paso"] == "preguntas-pfg", "sin grados, como siempre"
+    assert "carga antes los programas" in falla(server.lanzar, d, "grado-pfg")
+    codigo, cuerpo = pedir("/api/grados", {"nombre": "  Grado en Ingeniería Informática "})
+    assert codigo == 201 and json.loads(cuerpo) == {"id": "grado-en-ingenieria-informatica"}
+    g = server.GRADOS / "grado-en-ingenieria-informatica"
+    assert json.loads((g / "grado.json").read_text()) == {"nombre": "Grado en Ingeniería Informática", "fuentes": {}}
+    assert pedir("/api/grados", {"nombre": "Grado en Ingeniería Informática"})[0] == 409, "ya existe"
+    assert pedir("/api/grados", {"nombre": " "})[0] == 409
+    assert server.resumen(d)["paso"] == "preguntas-pfg", "un grado sin programas no cambia el flujo"
+
+    def subir(nombre, datos):
+        req = urllib.request.Request(f"{base}/api/grados/{g.name}/programas?nombre={urllib.parse.quote(nombre)}", datos)
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as err:
+            return err.code, json.loads(err.read())
+
+    assert subir("Redes II.pdf", b"%PDF-1.4 redes") == (201, {"slug": "redes-ii"})
+    assert subir("Sistemas Operativos.txt", "Tema 1. Procesos".encode()) == (201, {"slug": "sistemas-operativos"})
+    assert subir("falso.pdf", b"hola")[0] == 409 and subir("guia.docx", b"PK")[0] == 409
+    assert sorted(p.name for p in (g / "programas").iterdir()) == ["redes-ii.pdf", "sistemas-operativos.txt"]
+    assert server.resumen(d)["paso"] == "grado-pfg", "con programas, tras la lectura toca contrastar"
+    assert server.detalle(d)["contrastable"] and not server.detalle(d)["desfase"]
+
+    codigo, cuerpo = pedir(f"/api/grados/{g.name}/urls", {"urls": [
+        f"{web}/doa/look%5bconpub%5dMostrarPubGuiaDocAs?_codAsignatura=145320&_anyoAcad=2026", f"{web}/no-existe",
+        f"{web}/grande", f"{web}/guia.pdf", "file:///etc/passwd", ""]})
+    r = json.loads(cuerpo)
+    assert codigo == 200 and [x.get("slug") for x in r] == ["145320", None, None, "guia", None], r
+    assert "404" in r[1]["error"] and "5 MB" in r[2]["error"] and "http o https" in r[4]["error"]
+    assert (g / "programas" / "145320.html").read_bytes().startswith(b"<p>Contenidos") and (g / "programas" / "guia.pdf").exists()
+    assert json.loads((g / "grado.json").read_text())["fuentes"] == {"145320": r[0]["url"], "guia": f"{web}/guia.pdf"}
+
+    (g / "asignaturas").mkdir()
+    ficha = {"asignatura": "Arquitectura", "codigo": "145320", "curso": 3, "caracter": "optativa",
+             "temas": [{"id": "TEMA 2", "texto": "Jerarquía de memoria"}, {"id": "TEMA 3", "texto": "Procesadores"}]}
+    (g / "asignaturas" / "145320.json").write_text(json.dumps(ficha))
+    (g / "asignaturas" / "redes-ii.json").write_text(json.dumps({**ficha, "asignatura": "Redes II", "curso": 2}))
+    dg = json.loads(pedir(f"/api/grados/{g.name}")[1])
+    assert [(a["slug"], a["origen"], bool(a["ficha"])) for a in dg["asignaturas"]] == [
+        ("redes-ii", "PDF", True), ("145320", "URL", True), ("guia", "URL", False), ("sistemas-operativos", "Texto", False)], dg
+    assert dg["asignaturas"][1]["fuente"] == r[0]["url"] and (dg["programas"], dg["leidos"], dg["pfgs"]) == (4, 2, [])
+    codigo, cuerpo = pedir(dg["asignaturas"][3]["fuente"])
+    assert (codigo, cuerpo) == (200, "Tema 1. Procesos".encode())
+    codigo, cuerpo = pedir(f"/grados/{g.name}/programas/145320.html")
+    assert codigo == 200 and cuerpo.startswith(b"<p>Contenidos")
+    assert pedir(f"/grados/{g.name}/programas/../grado.json")[0] == 404
+
+    # Rehacer la ficha: misma asignatura, otra guía.
+    pedir(f"/api/grados/{g.name}/urls", {"urls": [f"{web}/guia?_codAsignatura=145320"]})
+    assert not (g / "asignaturas" / "145320.json").exists(), "un programa sustituido pierde su ficha"
+    (g / "asignaturas" / "145320.json").write_text(json.dumps(ficha))
+    assert pedir(f"/api/grados/{g.name}/programas/guia/borrar", {})[0] == 200
+    assert not (g / "programas" / "guia.pdf").exists() and "guia" not in json.loads((g / "grado.json").read_text())["fuentes"]
+
+    # El contraste. El agente falso escribe lo que escribiría grado-pfg.
+    agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
+                      'case "$2" in *nada*) ;; *grado-pfg*) echo "{}" > "$P/contraste.json";; esac\necho "hecho: $2"\n')
+    server.PROMPT = "{comando} nada"
+    server.lanzar(d)
+    assert server.EJECUCIONES["contrastar"]["fase"] == "grado-pfg" and server.EJECUCIONES["contrastar"]["proc"].wait() == 0
+    assert server.ejecucion("contrastar", server.resumen(d)["paso"])["estado"] == "sin_avance"
+    (d / "grado.json").write_text(json.dumps({"grado": g.name, "titulacion": "Grado en Ingeniería Informática", "pdf": 1, "pag": "i"}))
+    (d / "contraste.json").write_text(json.dumps({"grado": g.name, "motivo": "", "extiende": [], "aplica": [
+        {"texto": "Usa caché.", "pdf": 3, "pag": "1", "temas": [{"asignatura": "145320", "tema": "TEMA 2"}]}]}))
+    assert server.resumen(d)["paso"] == "preguntas-pfg", "contrastado: siguen las preguntas"
+    det = server.detalle(d)
+    assert det["grado_nombre"] == "Grado en Ingeniería Informática" and det["grado_programas"] == 3 and not det["desfase"]
+    assert det["catalogo"] == {"145320": {"asignatura": "Arquitectura", "caracter": "optativa",
+                                          "temas": {"TEMA 2": "Jerarquía de memoria", "TEMA 3": "Procesadores"}}}, "solo las asignaturas que usa"
+    assert json.loads(pedir(f"/api/grados/{g.name}")[1])["pfgs"] == [{"id": "contrastar", "titulo": "T"}]
+    time.sleep(0.01)
+    assert subir("Bases de datos.txt", b"Tema 1. SQL")[0] == 201
+    assert server.detalle(d)["desfase"], "un programa nuevo deja el contraste desfasado"
+    assert server.resumen(d)["paso"] == "preguntas-pfg", "el desfase es un aviso, no un estado"
+
+    server.PROMPT = "{comando}"
+    assert pedir("/api/pfgs/contrastar/ejecutar", {"fase": "grado-pfg"})[0] == 201, "rehacer el contraste a demanda"
+    server.EJECUCIONES["contrastar"]["proc"].wait()
+    assert server.ejecucion("contrastar", server.resumen(d)["paso"])["estado"] == "terminada"
+    assert not server.detalle(d)["desfase"]
+
+    (d / "grado.json").write_text(json.dumps({"grado": None, "titulacion": "Grado en ADE + Grado en Informática", "pdf": 1}))
+    (d / "contraste.json").write_text(json.dumps({"grado": None, "motivo": "Doble grado sin cargar.", "aplica": [], "extiende": []}))
+    det = server.detalle(d)
+    assert det["paso"] == "preguntas-pfg" and det["grado_nombre"] is None and not det["desfase"], "sin grado también cuenta como hecho"
+
+    # La cola contrasta entre la lectura y las preguntas.
+    agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
+                      'case "$2" in *leer-pfg*) echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json";; '
+                      '*grado-pfg*) echo "{}" > "$P/contraste.json";; '
+                      '*preguntas-pfg*) echo "[]" > "$P/preguntas.json"; echo "{}" > "$P/clasificacion.json";; esac\n')
+    for f in ["analisis.json", "contraste.json", "grado.json"]:
+        (d / f).unlink()
+    server.encolar(d)
+    for _ in range(100):
+        if server.resumen(d)["estado"] == "clasificadas":
+            break
+        time.sleep(0.05)
+    assert server.resumen(d)["estado"] == "clasificadas" and (d / "contraste.json").exists()
+
+    assert pedir(f"/api/grados/{g.name}/borrar", {})[0] == 200 and not g.exists()
+    assert json.loads(pedir("/api/grados")[1]) == [] and server.resumen(d)["paso"] is None
+    guias.shutdown()
     srv.shutdown()
 
 print("ok")

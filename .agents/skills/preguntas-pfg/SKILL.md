@@ -22,6 +22,8 @@ Las buenas preguntas salen de las **tensiones** del trabajo: las que han marcado
 
 **Dudas del tribunal.** Si existe `anotaciones.json`, lee las notas con `"tipo": "preguntas"`: son dudas que el docente ha anotado al leer la memoria, con su `cita`, su `pdf` y su `pag`. Compruébalas en el texto. Las que sigan en pie son candidatas a pregunta, ancladas a su página: no las copies, reescríbelas para que pasen los filtros. Ignora las notas de otros tipos y no abras `notas-personales.json`, que es privado.
 
+**Contraste con el grado.** Si existe `contraste.json`, lo que va en `extiende` es buen anclaje para preguntas de Dominio y Mecanismo: el estudiante ha ido más allá de lo que imparte el grado, y la defensa es el momento de que lo explique. No lo conviertas en sospecha.
+
 **Cuántas**: las que el trabajo merezca, normalmente entre 8 y 15. No hay cupo por tema. Si el trabajo flojea sobre todo en un punto, que la mayoría de las preguntas vayan ahí.
 
 **Cada pregunta tiene que pasar estos filtros.** Si no los pasa, reescríbela o descártala.

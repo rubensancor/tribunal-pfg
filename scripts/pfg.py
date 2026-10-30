@@ -9,15 +9,21 @@
   uv run scripts/pfg.py validar <id>        comprueba los JSON que escriben los agentes
   uv run scripts/pfg.py imagen <id> <pdf>   paginas/pNNN.png (figuras con datos) y pNNN.json (palabras, para el lector)
   uv run scripts/pfg.py paginas <id>        paginas/indice.json: tamaño y numeración impresa de cada página
+  uv run scripts/pfg.py grados              los grados cargados: [{id, nombre}]
+  uv run scripts/pfg.py programas <gid>     programas/* -> textos/*.txt; lista los que faltan por leer (sale con 2)
+  uv run scripts/pfg.py validar-grado <gid> comprueba las fichas de asignaturas/
+  uv run scripts/pfg.py catalogo <gid>      las fichas del grado en un solo JSON {slug: ficha}
 """
 import json
 import os
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 PFGS = RAIZ / "pfgs"
+GRADOS = RAIZ / "grados"
 CATEGORIAS = RAIZ / "config" / "categorias.json"
 TROZO = 12     # páginas por trozo cuando no hay marcador o una sección es demasiado larga
 DIVIDIR = 30   # un capítulo más largo se divide por sus subapartados
@@ -32,6 +38,8 @@ ANALISIS = ["titulo", "estudiante", "titulacion", "director", "paginas", "desfas
             "debilidades", "leer_al_menos", "coherencia", "notas_tribunal"]
 PREGUNTA = ["id", "prioridad", "pregunta", "anclaje", "por_que_importa", "buena_respuesta",
             "senal_alarma", "repregunta"]
+FICHA = ["asignatura", "codigo", "curso", "caracter", "temas"]
+CARACTERES = {"basica", "obligatoria", "optativa", "otra"}
 
 
 def dir_pfg(pfg_id):
@@ -212,7 +220,177 @@ def validar(d):
                 _anclados(v["respuesta"], f"{donde}.respuesta", problemas)
         elif r is not None:
             problemas.append("respuestas.json: se esperaba un objeto {id: {nota, respuesta}}")
+
+    gid = None
+    if (d / "grado.json").exists():
+        gr = _cargar(d / "grado.json", problemas)
+        if gr is not None and not _faltan(gr, ["grado", "titulacion", "pdf"], "grado.json", problemas):
+            gid = gr["grado"]
+            if gid is not None and not (isinstance(gid, str) and re.fullmatch(r"[a-z0-9-]+", gid)
+                                        and (GRADOS / gid / "grado.json").exists()):
+                problemas.append(f"grado.json.grado: no existe el grado {gid!r} (usa un id de `pfg.py grados` o null)")
+            if not isinstance(gr["pdf"], int):
+                problemas.append("grado.json.pdf: debe ser un entero (página del PDF)")
+    if (d / "contraste.json").exists():
+        c = _cargar(d / "contraste.json", problemas)
+        if c is not None and not _faltan(c, ["grado", "motivo", "aplica", "extiende"], "contraste.json", problemas):
+            if not (d / "grado.json").exists():
+                problemas.append("contraste.json: falta grado.json, que dice con qué grado se contrasta")
+            elif c["grado"] != gid:
+                problemas.append(f"contraste.json.grado: {c['grado']!r} no coincide con grado.json ({gid!r})")
+            cat = catalogo(GRADOS / gid) if isinstance(gid, str) and (GRADOS / gid).exists() else {}
+            for campo in ("aplica", "extiende"):
+                _anclados(c[campo], f"contraste.json.{campo}", problemas)
+                if c["grado"] is None and c[campo]:
+                    problemas.append(f"contraste.json.{campo}: sin grado debe ir vacía")
+                for i, e in enumerate(c[campo] if isinstance(c[campo], list) else []):
+                    donde = f"contraste.json.{campo}[{i}]"
+                    if not isinstance(e, dict):
+                        continue
+                    temas = e.get("temas")
+                    if not isinstance(temas, list):
+                        problemas.append(f"{donde}.temas: se esperaba una lista de {{asignatura, tema}}")
+                        continue
+                    if campo == "aplica" and not temas:
+                        problemas.append(f"{donde}.temas: lo que aplica sale de algún tema del grado")
+                    if campo == "extiende" and not (isinstance(e.get("mas_alla"), str) and e["mas_alla"].strip()):
+                        problemas.append(f"{donde}.mas_alla: explica en qué va más allá de lo que se imparte")
+                    for j, t in enumerate(temas):
+                        ficha = cat.get(t.get("asignatura")) if isinstance(t, dict) else None
+                        if not isinstance(ficha, dict):
+                            problemas.append(f"{donde}.temas[{j}]: la asignatura no está en asignaturas/ del grado")
+                        elif t.get("tema") not in {x.get("id") for x in ficha.get("temas") or [] if isinstance(x, dict)}:
+                            problemas.append(f"{donde}.temas[{j}]: {t.get('asignatura')} no tiene el tema {t.get('tema')!r}")
     return problemas
+
+
+def dir_grado(gid):
+    if not re.fullmatch(r"[a-z0-9-]+", gid):
+        sys.exit(f"id no válido: {gid}")
+    g = GRADOS / gid
+    if not (g / "grado.json").exists():
+        sys.exit(f"no existe {g / 'grado.json'}")
+    return g
+
+
+def grados():
+    dirs = sorted(g for g in GRADOS.iterdir() if (g / "grado.json").exists()) if GRADOS.exists() else []
+    return [{"id": g.name, "nombre": json.loads((g / "grado.json").read_text(encoding="utf-8"))["nombre"]} for g in dirs]
+
+
+def catalogo(g):
+    """{slug: ficha} de asignaturas/: la carpeta es el catálogo. Una ficha ilegible queda como None."""
+    cat = {}
+    for p in sorted((g / "asignaturas").glob("*.json")):
+        try:
+            cat[p.stem] = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            cat[p.stem] = None
+    return cat
+
+
+def validar_grado(g):
+    """(problemas, avisos) de las fichas de asignaturas/. Una guía sin contenidos es un aviso, no un error."""
+    problemas, avisos = [], []
+    for slug, ficha in catalogo(g).items():
+        donde = f"asignaturas/{slug}.json"
+        if ficha is None:
+            problemas.append(f"{donde}: JSON no válido")
+            continue
+        if _faltan(ficha, FICHA, donde, problemas):
+            continue
+        if ficha["caracter"] not in CARACTERES:
+            problemas.append(f"{donde}.caracter: debe ser uno de {sorted(CARACTERES)}")
+        if ficha["curso"] is not None and not isinstance(ficha["curso"], int):
+            problemas.append(f"{donde}.curso: debe ser un entero o null")
+        if not isinstance(ficha["temas"], list):
+            problemas.append(f"{donde}.temas: se esperaba una lista")
+            continue
+        if not ficha["temas"]:
+            avisos.append(f"{donde}: la guía no tiene contenidos; esta asignatura no contará en el contraste")
+        ids = [t.get("id") for t in ficha["temas"] if not _faltan(t, ["id", "texto"], f"{donde}.temas", problemas)]
+        if len(ids) != len(set(ids)):
+            problemas.append(f"{donde}.temas: ids repetidos")
+    return problemas, avisos
+
+
+def decodificar(datos):
+    try:
+        return datos.decode("utf-8")
+    except UnicodeDecodeError:
+        return datos.decode("iso-8859-15")  # el de las guías de Deusto, aunque su meta diga otra cosa
+
+
+class _Texto(HTMLParser):
+    SALTO = {"p", "div", "br", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "legend", "span"}
+
+    def __init__(self):
+        super().__init__()
+        self.partes, self.oculto = [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self.oculto += 1
+        if tag in self.SALTO:
+            self.partes.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self.oculto:
+            self.oculto -= 1
+
+    def handle_data(self, data):
+        if not self.oculto:
+            self.partes.append(data)
+
+
+def texto_html(html):
+    """Texto de una guía en HTML. Si tiene «Contenidos … Estrategia de enseñanza» (Deusto), solo la cabecera y
+    ese bloque, que aparece dos veces: así el lector lee entre 10 y 25 veces menos."""
+    p = _Texto()
+    p.feed(decodificar(html))
+    lineas = [x.strip() for x in re.sub(r"[ \t\xa0]+", " ", "".join(p.partes)).splitlines() if x.strip()]
+    ini = next((i for i, x in enumerate(lineas) if x == "Contenidos"), None)
+    fin = next((i for i in range(ini + 1, len(lineas)) if lineas[i].startswith("Estrategia de enseñanza")), None) \
+        if ini is not None else None
+    if fin is None:
+        return "\n".join(lineas) + "\n"
+    cabecera = []
+    for etiqueta in ("Asignatura:", "Titulación:", "Curso:", "Tipo:"):
+        i = next((i for i, x in enumerate(lineas[:ini]) if x == etiqueta), None)
+        if i is not None:
+            j = next((j for j in range(i + 1, ini) if lineas[j].endswith(":") and len(lineas[j]) < 40), ini)
+            cabecera += lineas[i:j]
+    return "\n".join(cabecera + lineas[ini:fin]) + "\n"
+
+
+def texto_pdf(datos):
+    import pymupdf
+    return "\n\n".join(f"{marca(p)}\n{p.get_text().strip()}" for p in pymupdf.open(stream=datos, filetype="pdf")) + "\n"
+
+
+CONVERSORES = {".pdf": texto_pdf, ".html": texto_html, ".txt": decodificar}
+
+
+def programas(gid):
+    """Pasa a texto los programas nuevos o cambiados y lista los que no tienen ficha o la tienen más vieja.
+    Se puede repetir: solo hace lo que falta. Sale con 2 si quedan programas por leer."""
+    g = dir_grado(gid)
+    pendientes = []
+    for p in sorted((g / "programas").glob("*")):
+        if p.suffix not in CONVERSORES or p.name.startswith("."):
+            continue
+        txt, ficha = g / "textos" / f"{p.stem}.txt", g / "asignaturas" / f"{p.stem}.json"
+        if not txt.exists() or txt.stat().st_mtime < p.stat().st_mtime:
+            try:
+                escribir(txt, CONVERSORES[p.suffix](p.read_bytes()).encode())
+            except Exception as e:  # un PDF roto no debe impedir leer los demás
+                print(f"no se puede pasar a texto {p.relative_to(RAIZ)}: {e}")
+                continue
+        if not ficha.exists() or ficha.stat().st_mtime < txt.stat().st_mtime:
+            pendientes.append(f"{txt.relative_to(RAIZ)} {ficha.relative_to(RAIZ)}")
+    print("\n".join(["pendientes (texto ficha):", *pendientes]) if pendientes else "ninguno")
+    if pendientes:
+        sys.exit(2)
 
 
 def escribir(ruta, datos):
@@ -262,6 +440,16 @@ def main(args):
         imagen(args[1], int(args[2]))
     elif len(args) >= 2 and args[0] == "paginas":
         paginas(args[1])
+    elif args == ["grados"]:
+        print(json.dumps(grados(), ensure_ascii=False))
+    elif len(args) >= 2 and args[0] == "programas":
+        programas(args[1])
+    elif len(args) >= 2 and args[0] == "validar-grado":
+        problemas, avisos = validar_grado(dir_grado(args[1]))
+        print("\n".join(problemas + [f"aviso: {a}" for a in avisos]) or "ok")
+        sys.exit(1 if problemas else 0)
+    elif len(args) >= 2 and args[0] == "catalogo":
+        print(json.dumps(catalogo(dir_grado(args[1])), ensure_ascii=False))
     else:
         sys.exit(__doc__)
 

@@ -5,7 +5,7 @@ description: Arranca una copia desechable del dashboard del Tribunal PFG (web lo
 
 # Verificar el dashboard del Tribunal PFG
 
-Superficie principal: el dashboard web (`dashboard/server.py` sirve `dashboard/index.html`, una SPA con rutas hash `#/<id>/<pestaña>/<categoría>`). Secundaria: la CLI `scripts/pfg.py` (`trocear`, `validar`, `imagen`, `paginas`). Las skills `leer-pfg`, `preguntas-pfg` y `anotaciones-pfg` las ejecuta un agente y quedan fuera: este arnés simula sus archivos de salida, que son el contrato con el dashboard.
+Superficie principal: el dashboard web (`dashboard/server.py` sirve `dashboard/index.html`, una SPA con rutas hash `#/<id>/<pestaña>/<categoría>`). Secundaria: la CLI `scripts/pfg.py` (`trocear`, `validar`, `imagen`, `paginas`). Las skills `leer-pfg`, `grado-pfg`, `preguntas-pfg` y `anotaciones-pfg` las ejecuta un agente y quedan fuera: este arnés simula sus archivos de salida, que son el contrato con el dashboard.
 
 Todo pasa por un solo script, `.agents/skills/verify-tribunal/verificar.py` (un script de uv; la primera vez descarga playwright y pymupdf). En los ejemplos, `V=.agents/skills/verify-tribunal/verificar.py`, ejecutado desde la raíz del repo.
 
@@ -57,15 +57,17 @@ Manejadores estables de la UI (no uses coordenadas):
 | Pestañas del detalle | enlaces `Ficha de lectura`, `Secciones · N/M`, `Preguntas · N`; la activa lleva `aria-current="page"` |
 | Filtro por categoría | `get_by_role("navigation", name="Filtrar por categoría")`; el chip activo lleva `aria-current="true"` |
 | Volver | `get_by_role("link", name="← Todos los PFG")` |
+| Grados | `get_by_role("link", name="Grados")` en la cabecera; en un grado, `get_by_role("region", name="Añadir programas")` |
 
 Para mover un PFG por los estados sin ejecutar las skills:
 
 ```bash
 $V pdf "Memoria Demo Verificación.pdf"           # sintética; ruta relativa → carpeta de evidencia
-$V fase memoria-demo-verificacion leido          # troceado|leyendo|leido|preguntas|clasificadas
+$V fase memoria-demo-verificacion leido          # troceado|leyendo|leido|contrastado|preguntas|clasificadas
+$V fichas grado-en-ingenieria-informatica        # fichas sintéticas para los programas del grado
 ```
 
-`fase` trocea con la CLI real de la copia, escribe JSON sintéticos marcados `[sintético]` y borra los de fases posteriores. Desde `leido` ejecuta `pfg.py validar` y sale con su código. El PDF hay que subirlo antes por la UI.
+`fase` trocea con la CLI real de la copia, escribe JSON sintéticos marcados `[sintético]` y borra los de fases posteriores. `contrastado` necesita un grado con fichas, creado por la UI y completado con `fichas`. Desde `leido` ejecuta `pfg.py validar` y sale con su código. El PDF hay que subirlo antes por la UI.
 
 ## Evidencia
 

@@ -1,6 +1,6 @@
 # Tribunal PFG
 
-Herramienta para preparar tribunales de Proyecto Fin de Grado: un dashboard local donde se cargan y se leen memorias en PDF, y tres skills que las leen, generan preguntas para la defensa y responden las notas del docente.
+Herramienta para preparar tribunales de Proyecto Fin de Grado: un dashboard local donde se cargan y se leen memorias en PDF, y cuatro skills que las leen, las contrastan con los programas de su grado, generan preguntas para la defensa y responden las notas del docente.
 
 ## Arrancar el dashboard
 
@@ -16,8 +16,9 @@ Abre http://127.0.0.1:8765. Si el puerto ya está ocupado, probablemente el dash
 
 1. El usuario sube los PDF en el dashboard, que los guarda en `pfgs/<id>/memoria.pdf`.
 2. Skill `leer-pfg`: escribe los resúmenes por sección y `analisis.json`.
-3. Skill `preguntas-pfg`: escribe `preguntas.json` y después `clasificacion.json`. Tiene en cuenta las notas «Para las preguntas» de `anotaciones.json`.
-4. Cuando quiera, el docente lee la memoria en el dashboard y anota. Skill `anotaciones-pfg`: responde las notas «Preguntar al agente» de `anotaciones.json` en `respuestas.json`.
+3. Skill `grado-pfg`, solo si el docente ha cargado en la pantalla Grados los programas de algún grado (`grados/<gid>/`): identifica el grado en la portada (`grado.json`), lee los programas que falten (`grados/<gid>/asignaturas/`) y escribe `contraste.json`.
+4. Skill `preguntas-pfg`: escribe `preguntas.json` y después `clasificacion.json`. Tiene en cuenta las notas «Para las preguntas» de `anotaciones.json` y lo que va más allá del grado en `contraste.json`.
+5. Cuando quiera, el docente lee la memoria en el dashboard y anota. Skill `anotaciones-pfg`: responde las notas «Preguntar al agente» de `anotaciones.json` en `respuestas.json`.
 
 El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También puede lanzar las skills en modo no interactivo con el harness y el modelo que fije `config/ejecucion.json` (pantalla Ajustes). En ese caso nadie leerá tus preguntas: no pidas confirmación. Los JSON de `pfgs/` son el contrato con el dashboard: después de escribirlos, ejecuta `uv run scripts/pfg.py validar <id>`.
 
@@ -28,6 +29,7 @@ El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También p
 - No mezcles contenido entre memorias. No inventes bibliografía, normativa ni datos externos.
 - Escribe en el idioma de la memoria.
 - Privacidad: las memorias contienen datos personales y trabajo no publicado. No salen de `pfgs/`, que está en `.gitignore`. Recuerda al docente una vez, en una línea, que use la herramienta de IA que autorice la universidad.
+- En el contraste con el grado, lo que aplica cita la asignatura y el tema del catálogo. Lista solo lo que el PFG usa, nunca las asignaturas que no usa.
 - Mientras generas preguntas no leas `config/categorias.json`: lo usa solo el clasificador, después.
 - No leas `notas-personales.json`: son notas privadas del docente.
 
