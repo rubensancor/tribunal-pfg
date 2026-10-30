@@ -16,7 +16,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "scripts"))
@@ -117,6 +117,10 @@ EJECUCIONES = {}  # id -> ejecución en memoria; se pierde al parar el servidor,
 CERROJO = threading.Lock()
 COLA = []  # ids de PFG subidos con «Leer y preguntar al cargar», preparados de uno en uno por preparar_cola
 HAY_COLA = threading.Condition(CERROJO)
+# gid -> URL pegadas en ese grado, cada una en_cola → descargando → hecha (con slug) | fallida (con error).
+# shortcut: en memoria, se pierden al reiniciar el servidor; pásalas a disco si hay que reanudar descargas.
+DESCARGAS = {}
+HAY_DESCARGA = threading.Condition(CERROJO)
 
 
 def leer(ruta):
@@ -536,19 +540,57 @@ def guardar_programa(g, nombre, datos):
     return poner_programa(g, slug(Path(nombre).stem, "programa"), ext, datos)
 
 
+class SoloHttp(urllib.request.HTTPRedirectHandler):
+    """urllib sigue redirecciones a ftp:// y rechaza file:// con un mensaje en inglés: aquí ambas fallan igual."""
+    def http_error_302(self, req, fp, code, msg, headers):
+        destino = urljoin(req.full_url, headers.get("location") or headers.get("uri") or "")
+        if urlparse(destino).scheme not in ("http", "https"):
+            fp.close()
+            raise ValueError(f"redirige a {destino}, que no es una URL http o https")
+        return super().http_error_302(req, fp, code, msg, headers)
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+
+DESCARGADOR = urllib.request.build_opener(SoloHttp)
+
+
 def descargar_programa(g, url):
     """Descarga una guía y la guarda con el código de la asignatura si la URL lo trae (Deusto: _codAsignatura)."""
     u = urlparse(url)
     if u.scheme not in ("http", "https") or not u.netloc:
         raise ValueError("solo se admiten URL http o https")
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "tribunal-pfg"}), timeout=20) as r:
+        with DESCARGADOR.open(urllib.request.Request(url, headers={"User-Agent": "tribunal-pfg"}), timeout=20) as r:
             datos = r.read(MAX_PROGRAMA + 1)
     except (OSError, ValueError, http.client.HTTPException) as e:
         raise ValueError(f"no se ha podido descargar ({e})")
     cod = parse_qs(u.query).get("_codAsignatura", [""])[0]
     s = cod.lower() if re.fullmatch(r"[A-Za-z0-9-]{1,60}", cod) else slug(Path(u.path).stem or u.netloc, "programa")
     return poner_programa(g, s, ".pdf" if datos.startswith(b"%PDF") else ".html", datos, url)
+
+
+def encolar_urls(g, urls):
+    """Añade las URL a las descargas del grado, olvidando las ya terminadas. Devuelve la lista para la respuesta."""
+    with HAY_DESCARGA:
+        activas = [x for x in DESCARGAS.get(g.name, []) if x["estado"] in ("en_cola", "descargando")]
+        DESCARGAS[g.name] = activas + [{"url": u, "estado": "en_cola"} for u in urls]
+        HAY_DESCARGA.notify()
+        return [dict(x) for x in DESCARGAS[g.name]]
+
+
+def descargar_cola():
+    """Descarga las URL pegadas de una en una, grado a grado y en el orden pegado: no saturar el servidor de la universidad."""
+    while True:
+        with HAY_DESCARGA:
+            gid, x = HAY_DESCARGA.wait_for(lambda: next(((gid, x) for gid, xs in DESCARGAS.items()
+                                                          for x in xs if x["estado"] == "en_cola"), None))
+            x["estado"] = "descargando"
+        try:
+            hecho = {"estado": "hecha", "slug": descargar_programa(GRADOS / gid, x["url"])}
+        except Exception as e:  # si el hilo muriera, esta URL se quedaría «descargando» y las demás en cola para siempre
+            hecho = {"estado": "fallida", "error": str(e)}
+        with CERROJO:
+            x.update(hecho)
 
 
 def borrar_programa(g, s):
@@ -564,6 +606,9 @@ def borrar_programa(g, s):
 
 def borrar_grado(g):
     with CERROJO:
+        for x in DESCARGAS.get(g.name, []):
+            if x["estado"] == "en_cola":
+                x.update(estado="fallida", error="este grado ya no existe")
         shutil.rmtree(g)
 
 
@@ -588,7 +633,9 @@ def detalle_grado(g):
     def orden(a):  # las leídas primero, por curso y nombre
         f = a["ficha"] or {}
         return not f, f.get("curso") if type(f.get("curso")) is int else 99, str(f.get("asignatura") or a["slug"])
-    return {**resumen_grado(g), "asignaturas": sorted(asignaturas, key=orden)}
+    with CERROJO:
+        descargas = [dict(x) for x in DESCARGAS.get(g.name, [])]
+    return {**resumen_grado(g), "asignaturas": sorted(asignaturas, key=orden), "descargas": descargas}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -706,13 +753,7 @@ class Handler(BaseHTTPRequestHandler):
                 urls = [u.strip() for u in (raw.get("urls") if isinstance(raw, dict) else None) or [] if isinstance(u, str) and u.strip()]
                 if not 0 < len(urls) <= MAX_URLS:
                     raise ValueError(f"pega entre 1 y {MAX_URLS} URL, una por línea")
-                resultados = []
-                for u in urls:  # de una en una: no saturar el servidor de la universidad
-                    try:
-                        resultados.append({"url": u, "slug": descargar_programa(g, u)})
-                    except ValueError as e:
-                        resultados.append({"url": u, "error": str(e)})
-                return self.responder(200, resultados)
+                return self.responder(202, encolar_urls(g, urls))
             if g := self.grado(url.path, r"/api/grados/([a-z0-9-]+)/programas/([a-z0-9-]+)/borrar"):
                 borrar_programa(g, url.path.split("/")[-2])
                 return self.responder(200, {"ok": True})
@@ -755,6 +796,7 @@ def main():
     webbrowser.open(url)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     threading.Thread(target=preparar_cola, daemon=True).start()
+    threading.Thread(target=descargar_cola, daemon=True).start()
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:
