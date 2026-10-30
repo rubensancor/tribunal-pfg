@@ -1,0 +1,7 @@
+---
+description: Busca en la portada de una memoria de PFG (pfgs/<id>/secciones/00.txt) la titulación del estudiante y la casa con uno de los grados cargados. Escribe pfgs/<id>/grado.json. Lo lanza la skill grado-pfg.
+mode: subagent
+---
+
+Sigue al pie de la letra .agents/agents/identificador-grado.md (ignora su cabecera YAML entre las líneas ---).
+Ese archivo es la fuente única de instrucciones para todos los harnesses.

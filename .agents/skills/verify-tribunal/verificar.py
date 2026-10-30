@@ -10,7 +10,8 @@
   verificar.py estado [clave]         imprime el estado (url, puerto, app, pfgs, evidencia) o una clave
   verificar.py pdf <ruta> [paginas]   crea una memoria sintética (nunca uses memorias reales);
                                       una ruta relativa se guarda en la carpeta de evidencia
-  verificar.py fase <id> <fase>       simula lo que escriben las skills: troceado|leyendo|leido|preguntas|clasificadas
+  verificar.py fase <id> <fase>       simula lo que escriben las skills: troceado|leyendo|leido|contrastado|preguntas|clasificadas
+  verificar.py fichas <gid>           pasa a texto los programas del grado con la CLI real y escribe fichas sintéticas
   verificar.py navegar < guion.py     ejecuta Playwright con page, url, pfgs, evidencia y ev(nombre)
   verificar.py limpiar                para el servidor y borra la copia; conserva la evidencia
 
@@ -33,7 +34,7 @@ BASE = Path(os.environ.get("TMPDIR", "/tmp")) / "tribunal-pfg-verify"
 COPIA = ["dashboard/server.py", "dashboard/index.html", "scripts/pfg.py", "config/categorias.json",
          "AGENTS.md", "CLAUDE.md",  # los agentes que lanza el dashboard necesitan las reglas y las skills
          *sorted(str(p.relative_to(REPO)) for d in (".agents", ".opencode") for p in (REPO / d).rglob("*") if p.is_file())]
-FASES = ["troceado", "leyendo", "leido", "preguntas", "clasificadas"]
+FASES = ["troceado", "leyendo", "leido", "contrastado", "preguntas", "clasificadas"]
 
 
 def run_id():
@@ -162,8 +163,12 @@ def fase(pfg_id, objetivo):
     n = FASES.index(objetivo)
     indice = json.loads((sd / "indice.json").read_text())
     # Las fases son acumulativas; se borra lo que corresponde a fases posteriores.
-    for f in [*sd.glob("[0-9][0-9].json"), d / "analisis.json", d / "preguntas.json", d / "clasificacion.json"]:
+    for f in [*sd.glob("[0-9][0-9].json"), d / "analisis.json", d / "grado.json", d / "contraste.json",
+              d / "preguntas.json", d / "clasificacion.json"]:
         f.unlink(missing_ok=True)
+    grado = next((g for g in sorted((Path(est["app"]) / "grados").glob("*/asignaturas")) if any(g.glob("*.json"))), None)
+    if objetivo == "contrastado" and not grado:
+        sys.exit("no hay ningún grado con fichas: crea uno por la UI, añade programas y ejecuta `fichas <gid>`")
     leidas = indice[:1] if objetivo == "leyendo" else indice if n >= 2 else []
     for s in leidas:
         (sd / f"{s['n']:02d}.json").write_text(json.dumps({
@@ -182,18 +187,54 @@ def fase(pfg_id, objetivo):
             "coherencia": [{"objetivo": "[sintético] Objetivo 1", "pdf": 3, "pag": "1", "evaluado": "parcial",
                             "evaluacion": {"pdf": 9, "pag": "7"}, "comentario": "[sintético] Comentario."}],
             "notas_tribunal": [ancla(6, "Nota para el tribunal")]}, ensure_ascii=False))
-    if n >= 3:
+    if n >= 3 and grado:  # sin grados, el flujo de siempre
+        contrastar(d, grado.parent)
+    if n >= 4:
         preguntas = [{"id": f"P{i}", "prioridad": i, "pregunta": f"[sintético] ¿Pregunta {i}?",
                       "anclaje": {"pdf": 4 + i, "pag": str(2 + i), "seccion": "Desarrollo", "cita": f"cita {i}"},
                       "por_que_importa": "x", "buena_respuesta": "x", "senal_alarma": "x", "repregunta": "x"}
                      for i in (1, 2, 3)]
         (d / "preguntas.json").write_text(json.dumps(preguntas, ensure_ascii=False))
-    if n >= 4:
+    if n >= 5:
         cats = ["validacion", "validacion", "decisiones-diseno"]
         (d / "clasificacion.json").write_text(json.dumps(
             {f"P{i}": {"categoria": c, "motivo": "[sintético]"} for i, c in enumerate(cats, 1)}, ensure_ascii=False))
     if n >= 2:  # a medio leer, validar se queja con razón de las secciones que faltan
         sys.exit(subprocess.run(cli + ["validar", pfg_id]).returncode)
+
+
+def contrastar(d, g):
+    """grado.json y contraste.json sintéticos con las fichas reales del grado: Aplica, Va más allá y una optativa."""
+    cat = {p.stem: json.loads(p.read_text()) for p in sorted((g / "asignaturas").glob("*.json"))}
+    con_temas = [(s, f) for s, f in cat.items() if f.get("temas")]
+    nombre = json.loads((g / "grado.json").read_text())["nombre"]
+    (d / "grado.json").write_text(json.dumps({"grado": g.name, "titulacion": nombre, "pdf": 1, "pag": "i"}, ensure_ascii=False))
+    optativa = next(((s, f) for s, f in con_temas if f["caracter"] == "optativa"), con_temas[-1])
+    contraste = {"grado": g.name, "motivo": "",
+                 "aplica": [{**ancla(4 + i, f"Aplica {f['temas'][0]['id']} de {f['asignatura']}"),
+                             "temas": [{"asignatura": s, "tema": f["temas"][0]["id"]}]} for i, (s, f) in enumerate(con_temas[:3])],
+                 "extiende": [{**ancla(9, "Va más allá de un tema"), "temas": [{"asignatura": optativa[0], "tema": optativa[1]["temas"][-1]["id"]}],
+                               "mas_alla": "[sintético] El programa trata el caso básico; la memoria usa una variante avanzada."},
+                              {**ancla(10, "Técnica que no aparece en ningún programa"), "temas": [],
+                               "mas_alla": f"[sintético] No aparece en los {len(cat)} programas cargados."}]}
+    (d / "contraste.json").write_text(json.dumps(contraste, ensure_ascii=False))
+
+
+def fichas(gid):
+    est = estado()
+    cli = ["uv", "run", str(Path(est["app"]) / "scripts" / "pfg.py")]
+    r = subprocess.run(cli + ["programas", gid], capture_output=True, text=True)
+    print(f"$ pfg.py programas {gid}  (código {r.returncode})\n{r.stdout}{r.stderr}")
+    pendientes = [linea.split()[1] for linea in r.stdout.splitlines()[1:]] if r.returncode == 2 else []
+    for i, ficha in enumerate(pendientes):
+        ruta = Path(est["app"]) / ficha
+        ruta.parent.mkdir(exist_ok=True)
+        ruta.write_text(json.dumps({
+            "asignatura": f"[sintético] {ruta.stem}", "codigo": ruta.stem if ruta.stem.isdigit() else "", "curso": i % 4 + 1,
+            "caracter": "optativa" if i == len(pendientes) - 1 else "obligatoria",
+            "temas": [{"id": f"TEMA {k}", "texto": f"[sintético] Tema {k} de {ruta.stem}"} for k in (1, 2)]}, ensure_ascii=False))
+        print(f"ficha sintética: {ficha}")
+    sys.exit(subprocess.run(cli + ["validar-grado", gid]).returncode)
 
 
 def navegar():
@@ -253,6 +294,8 @@ if __name__ == "__main__":
         pdf(a[1], int(a[2]) if len(a) == 3 else 24)
     elif len(a) == 3 and a[0] == "fase":
         fase(a[1], a[2])
+    elif len(a) == 2 and a[0] == "fichas":
+        fichas(a[1])
     elif a == ["navegar"]:
         navegar()
     elif a == ["limpiar"]:

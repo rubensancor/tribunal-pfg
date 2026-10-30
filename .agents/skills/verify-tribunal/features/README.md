@@ -34,7 +34,8 @@ Un H1, un párrafo con el comportamiento visible y cuatro H2 en este orden: `Sub
 - [Estado y siguiente paso](./estados-pfg.md): estados de la tarjeta, KPI, progreso, comando del siguiente paso, botón Copiar y borrar varios a la vez.
 - [Detalle de un PFG](./detalle-pfg.md): ficha, secciones, preguntas con filtro por categoría, enlaces al PDF, borrar y PFG inexistente.
 - [Lector y anotaciones](./lector-anotaciones.md): abrir la memoria desde «Leer memoria» o un enlace de página, notas de cada tipo, respuesta del agente y repintado.
+- [Programas del grado](./grados.md): crear un grado, añadir programas por archivo, URL o texto pegado, el paso «Contrastar con el grado», la pestaña Grado y el aviso de desfase.
 - [Ejecutar fases y ajustes](./ejecutar-fases.md): harness y modelo por fase, lanzar, detener, resultado sin avance y protección de origen.
 - [CLI pfg.py](./cli-pfg.md): `trocear`, `validar`, `imagen` y `paginas` sobre la copia desechable.
 
-Las skills `leer-pfg`, `preguntas-pfg` y `anotaciones-pfg` se ejecutan de verdad solo en [ejecutar-fases](./ejecutar-fases.md), que gasta tokens. Las demás recetas usan `fase`, que simula sus archivos de salida.
+Las skills `leer-pfg`, `grado-pfg`, `preguntas-pfg` y `anotaciones-pfg` se ejecutan de verdad solo en [ejecutar-fases](./ejecutar-fases.md), que gasta tokens. Las demás recetas usan `fase`, que simula sus archivos de salida.

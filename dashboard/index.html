@@ -159,6 +159,26 @@ form.ajustes select, form.ajustes input { font: inherit; padding: 5px 8px; borde
 form.ajustes .btn { margin-top: 12px; }
 .next { display: grid; gap: 8px; background: var(--accent-soft); border-radius: var(--radius); padding: 14px 16px; margin: 18px 0 4px; font-size: 14px; }
 .next .cmd { background: var(--panel); }
+.next.desfase { background: var(--warn-soft); }
+.bloque.mas-alla { border-left: 3px solid var(--violet); }
+.bloque.mas-alla h3 { color: var(--violet); }
+.linea-grado { margin: 0 0 14px; }
+.linea-grado b { color: var(--ink); }
+.card.nuevo-grado { border-style: dashed; }
+.card input, .anadir input, .anadir textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+.anadir { display: grid; gap: 14px; margin-bottom: 18px; }
+.anadir h3 { margin: 0; }
+.anadir-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.anadir-cols > * { display: grid; gap: 6px; align-content: start; margin: 0; }
+.anadir-cols b { font-size: 13.5px; }
+.anadir textarea { min-height: 92px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.anadir-cols .btn { justify-self: start; }
+.soltar { border: 2px dashed var(--line); border-radius: 10px; padding: 22px 12px; text-align: center; color: var(--muted); }
+.soltar .btn { margin-top: 8px; }
+.errores-url { margin: 0; font-size: 13px; color: var(--bad); overflow-wrap: anywhere; }
+.acciones-fila { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; font-size: 13px; }
+.acciones-fila .btn.peligro { color: var(--bad); }
+#confirmar ul:empty { display: none; }
 
 .vacio { text-align: center; padding: 70px 20px; border: 2px dashed var(--line); border-radius: 14px; color: var(--muted); }
 .vacio b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
@@ -340,11 +360,13 @@ aplicarTema();
         <svg class="luna" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
         <svg class="sistema" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
       </button>
+      <a class="btn" href="#grados">Grados</a>
       <a class="btn" href="#ajustes">Ajustes</a>
-      <label class="btn" title="Al cargar un PDF, lanza la lectura y después las preguntas con los harnesses de Ajustes"><input type="checkbox" id="preparar"> Leer y preguntar al cargar</label>
+      <label class="btn" title="Al cargar un PDF, lanza la lectura, el contraste con el grado si hay programas y las preguntas con los harnesses de Ajustes"><input type="checkbox" id="preparar"> Leer y preguntar al cargar</label>
       <button class="btn primary" type="button" id="cargar">Cargar PFG</button>
     </div>
     <input type="file" id="archivo" accept="application/pdf,.pdf" multiple hidden>
+    <input type="file" id="archivo-programas" accept="application/pdf,.pdf,text/plain,.txt" multiple hidden>
   </div>
 </header>
 <main class="wrap" id="main" aria-live="polite"></main>
@@ -386,11 +408,11 @@ aplicarTema();
 const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const lista = x => Array.isArray(x) ? x : [];
-const MAX = 100 * 1024 * 1024;
+const MAX = 100 * 1024 * 1024, MAX_PROGRAMA = 5 * 1024 * 1024;
 const ESTADOS = {pendiente: "Pendiente de leer", leyendo: "Leyendo", leido: "Leído", preguntas: "Preguntas sin clasificar", clasificadas: "Listo"};
 const TENSIONES = {sin_justificar: "Sin justificar", sin_evidencia: "Sin evidencia", incoherencia: "Incoherencia",
   validacion_debil: "Validación débil", limite_no_explorado: "Límite no explorado", cambio_de_nivel: "Cambio de nivel"};
-let pintado = "";  // última respuesta pintada: solo se repinta si algo cambia
+let pintado = "", hashPintado = "";  // última respuesta pintada: solo se repinta si algo cambia
 
 // ---------- piezas ----------
 // Un clic abre el lector del dashboard; con ⌘ o Ctrl sigue abriendo el visor del navegador.
@@ -402,7 +424,8 @@ const items = (id, xs, extra = () => "") => lista(xs).length
 const comando = c => `<div class="cmd"><code>${h(c)}</code><button class="btn" type="button" data-copiar="${h(c)}">Copiar</button></div>`;
 // antes de leer la memoria no hay título: el id sale del nombre del archivo
 const titulo = p => p.titulo !== p.id ? p.titulo : p.id.replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
-const accion = p => p.estado === "preguntas" ? "Clasificar las preguntas" : p.paso === "leer-pfg" ? "Leer la memoria" : "Generar las preguntas";
+const ACCION = {"leer-pfg": "Leer la memoria", "grado-pfg": "Contrastar con el grado", "preguntas-pfg": "Generar las preguntas"};
+const accion = p => p.estado === "preguntas" ? "Clasificar las preguntas" : ACCION[p.paso];
 const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Falló", detenida: "Detenida",
   sin_avance: "Terminó sin completar la fase"};
 const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""}${e.despues && e.estado === "en_curso" ? ` · luego, ${h(e.despues.toLowerCase())}` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
@@ -453,10 +476,12 @@ function panelCola(pfgs) {
   return `<section class="panel-cola" aria-label="Cola de preparación">
     <div class="cola-cab"><h2>Cola de preparación</h2><span class="muted">${cab}</span>${enCola.length ? `<button class="btn" type="button" data-vaciar-cola>Vaciar cola</button>` : ""}</div>
     ${enMarcha.map(p => {
-      const lectura = p.ejecucion.paso === "leer-pfg";
+      const e = p.ejecucion, lectura = e.paso === "leer-pfg";
+      const pasos = [["leer-pfg", "Lectura"], ...(e.paso === "grado-pfg" || e.despues === "Contraste con el grado" ? [["grado-pfg", "Grado"]] : []), ["preguntas-pfg", "Preguntas"]];
+      const i = pasos.findIndex(([k]) => k === e.paso), ahora = i < 0 ? pasos.length - 1 : i;
       return `<div class="cola-actual" data-pfg="${p.id}">
         <div class="cola-fila"><a href="#/${p.id}">${h(titulo(p))}</a><button class="btn" type="button" data-detener>Detener</button></div>
-        <div class="cola-pasos"><i class="${lectura ? "ahora" : "hecho"}">Lectura${lectura && p.secciones ? ` · ${p.leidas}/${p.secciones}` : ""}</i><hr><i class="${lectura ? "" : "ahora"}">Preguntas</i></div>
+        <div class="cola-pasos">${pasos.map(([k, t], j) => `<i class="${j < ahora ? "hecho" : j === ahora ? "ahora" : ""}">${t}${k === "leer-pfg" && lectura && p.secciones ? ` · ${p.leidas}/${p.secciones}` : ""}</i>`).join("<hr>")}</div>
         ${lectura && p.secciones ? `<div class="prog" role="progressbar" aria-label="Secciones leídas" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}"><div style="width:${100 * p.leidas / p.secciones}%"></div></div>` : ""}
       </div>`;
     }).join("")}
@@ -491,8 +516,10 @@ function rejilla(pfgs) {
 function detalle(p, pestana, cat) {
   const a = p.analisis && !p.analisis._error ? p.analisis : null;
   const sub = a ? [a.estudiante, a.titulacion, a.director && "Dir.: " + a.director, a.paginas && a.paginas + " págs."].filter(Boolean).map(h).join(" · ") : "";
-  const tabs = [["ficha", "Ficha de lectura"], ["secciones", `Secciones · ${p.leidas}/${p.secciones}`], ["preguntas", `Preguntas · ${lista(p.preguntas).length}`]];
-  const vistas = {ficha: vistaFicha, secciones: vistaSecciones, preguntas: vistaPreguntas};
+  const mas = p.contraste && !p.contraste._error && p.contraste.grado ? lista(p.contraste.extiende).length : null;
+  const tabs = [["ficha", "Ficha de lectura"], ["secciones", `Secciones · ${p.leidas}/${p.secciones}`],
+    ...(p.contraste || p.contrastable ? [["grado", mas === null ? "Grado" : `Grado · ${mas} más allá`]] : []), ["preguntas", `Preguntas · ${lista(p.preguntas).length}`]];
+  const vistas = {ficha: vistaFicha, secciones: vistaSecciones, grado: vistaGrado, preguntas: vistaPreguntas};
   return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav>
     <div class="det-head">
       <div><h1>${h(titulo(p))}</h1><p class="muted"><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span> ${sub}</p></div>
@@ -547,6 +574,87 @@ function vistaSecciones(p) {
         ${bloque("No legible en el texto", items(p.id, lista(l.no_legible).map(x => ({...x, texto: x.motivo}))))}
       </div></details>`;
   }).join("");
+}
+
+const CARACTER = {basica: "básica", obligatoria: "obligatoria", optativa: "optativa", otra: "otra"};
+// Cada tema citado, con su texto del programa al pasar el ratón. Optativa: el estudiante pudo no cursarla.
+const refTemas = (p, x) => {
+  const ts = lista(x.temas).filter(t => t && typeof t === "object");
+  const optativa = ts.some(t => p.catalogo[t.asignatura]?.caracter === "optativa");
+  return ts.map(t => {
+    const a = p.catalogo[t.asignatura];
+    return `<span class="tag" title="${h(a?.temas[t.tema] ?? "")}">${h(a?.asignatura ?? t.asignatura)} · ${h(t.tema)}</span>`;
+  }).join(" ") + (optativa ? ` <span class="tag aviso">optativa</span>` : "");
+};
+function vistaGrado(p) {
+  const c = p.contraste, gr = p.grado && !p.grado._error ? p.grado : null;
+  const contrastar = texto => p.contrastable && p.ejecucion?.estado !== "en_curso" && p.paso !== "grado-pfg"
+    ? `<div data-pfg="${p.id}"><button class="btn" type="button" data-ejecutar data-fase="grado-pfg">${texto} con ${h(p.ejecutor_grado)}</button></div>` : "";
+  if (!c) return vacio("Todavía no se ha contrastado con el grado",
+    `<p>El agente identifica el grado en la portada y compara la memoria con los programas de sus asignaturas.</p>${contrastar("Contrastar con el grado")}`);
+  if (c._error) return error(c._error);
+  const portada = rotulo => gr ? ` ${rotulo} (${pag(p.id, gr)}): «${h(gr.titulacion)}».` : "";
+  if (!c.grado) return `<p class="linea-grado">No se ha identificado el grado de esta memoria.${portada("Titulación en la portada")} ${h(c.motivo)}</p>
+    <p class="muted">Si falta, créalo en <a href="#grados">Grados</a> con el nombre exacto de la portada, carga sus programas y vuelve a contrastar.</p>${contrastar("Rehacer el contraste")}`;
+  const anclados = (xs, extra) => lista(xs).length
+    ? `<ul class="items">${lista(xs).map(x => `<li>${h(x.texto)} ${pag(p.id, x)} ${refTemas(p, x)}${extra(x)}</li>`).join("")}</ul>` : `<p class="muted">—</p>`;
+  return `${p.desfase ? `<div class="next desfase"><b>Los programas del grado han cambiado después del contraste.</b>${contrastar("Rehacer el contraste")}</div>` : ""}
+    <p class="muted linea-grado">${p.grado_nombre ? `Comparado con <b>${h(p.grado_nombre)}</b> (${p.grado_programas} ${p.grado_programas === 1 ? "programa" : "programas"}).`
+      : `El grado «${h(c.grado)}» ya no está cargado.`}${portada("Identificado en la portada")} Es un mapa para el tribunal, no una valoración.</p>
+    <div class="ficha">
+      <div class="bloque ancho mas-alla"><h3>Va más allá de lo que se imparte</h3>${anclados(c.extiende, x => `<br><span class="muted">${h(x.mas_alla)}</span>`)}</div>
+      <div class="bloque ancho"><h3>Aplica lo que se imparte</h3>${anclados(c.aplica, () => "")}</div>
+    </div>`;
+}
+
+function vistaGrados(gs) {
+  const estado = g => !g.programas ? ["", "Sin programas"] : g.leidos === g.programas ? ["clasificadas", "Leídos"] : ["leyendo", `${g.programas - g.leidos} sin leer`];
+  return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav><h1>Grados</h1>
+    <p class="resumen">Carga las guías docentes de las asignaturas de cada titulación, en PDF, texto o URL. El agente identifica el grado en la portada de cada memoria
+      y lee los programas la primera vez que contrasta un PFG de ese grado. Un doble grado es un grado aparte, con sus propias asignaturas.</p>
+    <div class="grid">${gs.map(g => `<article class="card">
+        <div class="meta"><span class="badge ${estado(g)[0]}">${estado(g)[1]}</span><span class="muted">${g.programas} ${g.programas === 1 ? "programa" : "programas"}</span></div>
+        <h2><a href="#grados/${g.id}">${h(g.nombre)}</a></h2>
+        <span class="muted">${g.leidos === g.programas ? `${g.leidos} asignaturas` : "Se leerán con el próximo PFG de este grado"}${g.pfgs.length ? ` · ${g.pfgs.length} PFG lo ${g.pfgs.length === 1 ? "usa" : "usan"}` : ""}</span>
+      </article>`).join("")}
+      <form class="card nuevo-grado" id="nuevo-grado"><h2><label for="nombre-grado">Nuevo grado</label></h2>
+        <input id="nombre-grado" data-conservar required maxlength="200" placeholder="Grado en Ingeniería Informática" autocomplete="off">
+        <span class="muted">El nombre exacto de la titulación, como aparece en la portada de las memorias.</span>
+        <div class="abajo"><button class="btn primary" type="submit">Crear grado</button></div></form></div>`;
+}
+
+let descarga = {gid: null, errores: [], en_curso: false};  // la última descarga de URL, que sobrevive al repintado
+function vistaUnGrado(g) {
+  const sin = g.programas - g.leidos;
+  const fila = a => {
+    const f = a.ficha, nombre = f?.asignatura || a.slug, ts = lista(f?.temas);
+    const pie = `<p class="acciones-fila"><a href="${h(a.fuente)}" target="_blank" rel="noopener">Ver fuente</a>
+      <button class="btn enlace peligro" type="button" data-borrar-programa="${h(a.slug)}" data-titulo="${h(nombre)}">Borrar</button></p>`;
+    const meta = f ? [Number.isInteger(f.curso) && `${f.curso}.º`, CARACTER[f.caracter], `${ts.length} ${ts.length === 1 ? "tema" : "temas"}`, a.origen] : ["sin leer", a.origen];
+    return `<details class="sec" id="a-${h(a.slug)}"><summary><span class="t">${h(nombre)}</span><span class="muted">${meta.filter(Boolean).map(h).join(" · ")}</span></summary>
+      <div class="cuerpo">${!f ? `<p class="muted">Se leerá con el próximo PFG de este grado.</p>`
+        : ts.length ? `<ul class="items">${ts.map(t => `<li><b>${h(t.id)}</b> ${h(t.texto)}</li>`).join("")}</ul>`
+        : `<p class="muted">La guía no tiene contenidos: esta asignatura no cuenta en el contraste.</p>`}${pie}</div></details>`;
+  };
+  const errores = descarga.gid === g.id ? descarga.errores : [];
+  return `<nav class="crumbs"><a href="#grados">← Grados</a></nav>
+    <div class="det-head"><div><h1>${h(g.nombre)}</h1>
+      <p class="resumen"><b>${g.leidos}</b> de <b>${g.programas}</b> programas leídos${sin ? ` · ${sin === 1 ? "el que falta se leerá" : `los ${sin} restantes se leerán`} con el próximo PFG de este grado` : ""}${
+        g.pfgs.length ? ` · lo ${g.pfgs.length === 1 ? "usa" : "usan"} ${g.pfgs.map(x => `<a href="#/${x.id}/grado">${h(x.titulo)}</a>`).join(", ")}` : ""}</p></div>
+      <div class="botones"><button class="btn peligro" type="button" data-borrar-grado="${g.id}" data-titulo="${h(g.nombre)}">Borrar grado</button></div></div>
+    <section class="bloque anadir" aria-labelledby="anadir-titulo"><h3 id="anadir-titulo">Añadir programas</h3>
+      <div class="anadir-cols">
+        <div><b>Archivos</b><div class="soltar">Suelta aquí PDF o .txt<br><button class="btn" type="button" data-elegir-programas>Elegir archivos</button></div></div>
+        <form id="urls"><label for="urls-texto"><b>URL de las guías</b></label>
+          <textarea id="urls-texto" data-conservar placeholder="Una URL por línea"></textarea>
+          <button class="btn" type="submit"${descarga.en_curso ? " disabled" : ""}>${descarga.en_curso ? "Descargando…" : "Descargar"}</button>
+          ${errores.length ? `<ul class="items errores-url" aria-label="URL que no se han podido añadir">${errores.map(e => `<li>${h(e.url)}: ${h(e.error)}</li>`).join("")}</ul>` : ""}</form>
+        <form id="pegar"><label for="pegar-texto"><b>Pegar texto</b></label>
+          <input id="pegar-nombre" data-conservar placeholder="Nombre (opcional)" aria-label="Nombre del programa (opcional)" autocomplete="off">
+          <textarea id="pegar-texto" data-conservar placeholder="Pega aquí el texto de una guía"></textarea>
+          <button class="btn" type="submit">Añadir</button></form>
+      </div></section>
+    ${g.asignaturas.map(fila).join("") || `<p class="muted">Todavía no hay programas en este grado.</p>`}`;
 }
 
 function vistaPreguntas(p, cat) {
@@ -604,20 +712,28 @@ function vistaAjustes(c) {
 }
 
 async function cargar() {
-  const ajustes = location.hash === "#ajustes";
+  const ajustes = location.hash === "#ajustes", grados = location.hash.match(/^#grados(?:\/([a-z0-9-]+))?$/);
   const [, id, pestana = "ficha", cat] = location.hash.match(/^#\/([a-z0-9-]+)(?:\/(\w+))?(?:\/([a-z0-9-]+))?/) || [];
   let r, txt;
-  try { r = await fetch(ajustes ? "/api/config" : id ? `/api/pfgs/${id}` : "/api/pfgs"); txt = await r.text(); }
+  try { r = await fetch(ajustes ? "/api/config" : grados ? `/api/grados${grados[1] ? "/" + grados[1] : ""}` : id ? `/api/pfgs/${id}` : "/api/pfgs"); txt = await r.text(); }
   catch { return aviso("No se puede conectar con el servidor del dashboard."); }
   if (location.hash + txt === pintado) return;
+  const mismaVista = hashPintado === location.hash;
   pintado = location.hash + txt;
+  hashPintado = location.hash;
   const abiertos = [...document.querySelectorAll("details[open][id]")].map(d => d.id);
+  // lo que el docente está escribiendo en el panel de un grado no se pierde cuando llega una ficha nueva
+  const campos = mismaVista ? [...document.querySelectorAll("#main [data-conservar]")].map(c => [c.id, c.value]) : [];
+  const foco = mismaVista && document.activeElement?.closest("#main") ? document.activeElement.id : null;
   const datos = r.ok ? JSON.parse(txt) : null;
-  $("#main").innerHTML = r.status === 404 && id ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
+  $("#main").innerHTML = r.status === 404 && grados ? vacio("Ese grado no existe", `<p><a href="#grados">Volver a los grados</a></p>`)
+    : r.status === 404 && id ? vacio("Ese PFG no existe", `<p><a href="#/">Volver</a></p>`)
     : !r.ok ? vacio("El dashboard no ha podido cargar esta página", `<p>${h(JSON.parse(txt || "{}").error || "error " + r.status)}.
         Si acabas de actualizar el dashboard, reinicia el servidor (Ctrl+C y <code>uv run dashboard/server.py</code>).</p><p><a href="#/">Volver</a></p>`)
-    : ajustes ? vistaAjustes(datos) : id ? detalle(datos, pestana, cat) : rejilla(datos);
+    : ajustes ? vistaAjustes(datos) : grados ? (grados[1] ? vistaUnGrado(datos) : vistaGrados(datos)) : id ? detalle(datos, pestana, cat) : rejilla(datos);
   abiertos.forEach(i => document.getElementById(i)?.setAttribute("open", ""));
+  campos.forEach(([i, v]) => { const c = document.getElementById(i); if (c) c.value = v; });
+  if (foco) document.getElementById(foco)?.focus();
   repintarSeleccion();
   if (lector.id && lector.id !== id) cerrarLector();
   else if (lector.id && datos) ponerNotas(datos);
@@ -636,9 +752,40 @@ function confirmarBorrado(items) {
     : `${n === 1 ? "Se borran el PDF y todo lo generado a partir de él" : "Se borran los PDF y todo lo generado a partir de ellos"}: resúmenes, fichas, preguntas, notas y registros. No se puede deshacer.`;
   si.innerHTML = `${PAPELERA}${n > 1 ? `Borrar ${n} PFG` : "Borrar"}`;
   si.disabled = !n;
+  return abrirConfirmar().then(si => si ? borrables : []);
+}
+
+function abrirConfirmar() {
+  const d = $("#confirmar");
   d.returnValue = "";
   d.showModal();
-  return new Promise(fin => d.addEventListener("close", () => fin(d.returnValue === "si" ? borrables : []), {once: true}));
+  return new Promise(fin => d.addEventListener("close", () => fin(d.returnValue === "si"), {once: true}));
+}
+
+function confirmar(titulo, nota, boton) {
+  $("#confirmar-titulo").textContent = titulo;
+  $("#confirmar ul").innerHTML = "";
+  $("#confirmar-nota").textContent = nota;
+  const si = $('#confirmar [value="si"]');
+  si.innerHTML = `${PAPELERA}${h(boton)}`;
+  si.disabled = false;
+  return abrirConfirmar();
+}
+
+const gradoActual = () => location.hash.match(/^#grados\/([a-z0-9-]+)$/)?.[1];
+async function subirProgramas(gid, files) {
+  let n = 0;
+  const errores = [];
+  for (const f of [...files]) {
+    if (!/\.(pdf|txt)$/i.test(f.name)) { errores.push(`${f.name}: no es un PDF ni un .txt.`); continue; }
+    if (f.size > MAX_PROGRAMA) { errores.push(`${f.name}: ocupa más de 5 MB.`); continue; }
+    try {
+      const r = await fetch(`/api/grados/${gid}/programas?nombre=${encodeURIComponent(f.name)}`, {method: "POST", body: f});
+      if (r.ok) n++; else errores.push(`${f.name}: ${(await r.json().catch(() => ({}))).error || "error " + r.status}.`);
+    } catch { errores.push(`${f.name}: no se pudo subir.`); }
+  }
+  aviso([n && `${n} ${n === 1 ? "programa añadido" : "programas añadidos"}.`, ...errores].filter(Boolean).join(" "));
+  pintado = ""; cargar();
 }
 
 async function borrarSeleccion() {
@@ -710,6 +857,7 @@ try { $("#preparar").checked = localStorage.preparar === "1"; } catch {}
 $("#preparar").onchange = e => { try { e.target.checked ? localStorage.preparar = "1" : localStorage.removeItem("preparar"); } catch {} };
 $("#cargar").onclick = () => $("#archivo").click();
 $("#archivo").onchange = e => { subir(e.target.files); e.target.value = ""; };
+$("#archivo-programas").onchange = e => { subirProgramas(gradoActual(), e.target.files); e.target.value = ""; };
 $("#confirmar").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });  // clic en el fondo: cancelar
 async function post(url, cuerpo) {
   try {
@@ -728,7 +876,7 @@ document.addEventListener("click", async e => {
   if (accion) {
     const id = accion.closest("[data-pfg]").dataset.pfg;
     accion.disabled = true;
-    if (await post(`/api/pfgs/${id}/${"ejecutar" in accion.dataset ? "ejecutar" : "detener"}`))
+    if (await post(`/api/pfgs/${id}/${"ejecutar" in accion.dataset ? "ejecutar" : "detener"}`, accion.dataset.fase ? {fase: accion.dataset.fase} : undefined))
       aviso("ejecutar" in accion.dataset ? "Ejecución lanzada." : "Ejecución detenida.");
     pintado = ""; return cargar();
   }
@@ -747,6 +895,19 @@ document.addEventListener("click", async e => {
     return;
   }
   if (e.target.closest("[data-borrar-sel]")) return borrarSeleccion();
+  if (e.target.closest("[data-elegir-programas]")) return $("#archivo-programas").click();
+  const prog = e.target.closest("[data-borrar-programa]");
+  if (prog) {
+    if (!await confirmar(`¿Borrar «${prog.dataset.titulo}»?`, "Se borran el programa, su texto y su ficha. Los contrastes que lo usaban quedarán desfasados.", "Borrar")) return;
+    if (await post(`/api/grados/${gradoActual()}/programas/${prog.dataset.borrarPrograma}/borrar`)) aviso("Programa borrado.");
+    pintado = ""; return cargar();
+  }
+  const grado = e.target.closest("[data-borrar-grado]");
+  if (grado) {
+    if (!await confirmar(`¿Borrar «${grado.dataset.titulo}»?`, "Se borran todos sus programas y fichas. Los contrastes ya hechos se quedan en cada PFG, pero sin el catálogo.", "Borrar grado")) return;
+    if (await post(`/api/grados/${grado.dataset.borrarGrado}/borrar`)) { aviso("Grado borrado."); location.hash = "#grados"; }
+    return;
+  }
   const todos = e.target.closest("[data-sel-todos], [data-sel-ninguno]");
   if (todos) {
     document.querySelectorAll("[data-sel]").forEach(c => {
@@ -781,6 +942,43 @@ document.addEventListener("input", e => {  // los niveles de esfuerzo dependen d
   esfuerzo.disabled = !lista.length;
 });
 document.addEventListener("submit", async e => {
+  const gid = gradoActual();
+  if (e.target.id === "nuevo-grado") {
+    e.preventDefault();
+    const r = await fetch("/api/grados", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nombre: $("#nombre-grado").value})}).catch(() => null);
+    const res = await r?.json().catch(() => ({}));
+    if (!r?.ok) return aviso(res?.error || "No se ha podido crear el grado.");
+    $("#nombre-grado").value = "";
+    location.hash = `#grados/${res.id}`;
+    return;
+  }
+  if (e.target.id === "pegar") {
+    e.preventDefault();
+    const texto = $("#pegar-texto").value.trim();
+    if (!texto) return aviso("Pega antes el texto de la guía.");
+    const nombre = $("#pegar-nombre").value.trim() || texto.split("\n")[0].trim().slice(0, 80);  // sin nombre, la primera línea
+    const r = await fetch(`/api/grados/${gid}/programas?nombre=${encodeURIComponent(nombre + ".txt")}`, {method: "POST", body: texto}).catch(() => null);
+    if (!r?.ok) return aviso((await r?.json().catch(() => ({})))?.error || "No se ha podido añadir el texto.");
+    $("#pegar-texto").value = $("#pegar-nombre").value = "";
+    aviso("Programa añadido.");
+    pintado = ""; return cargar();
+  }
+  if (e.target.id === "urls") {
+    e.preventDefault();
+    const urls = $("#urls-texto").value.split("\n").map(u => u.trim()).filter(Boolean);
+    if (!urls.length) return aviso("Pega antes alguna URL, una por línea.");
+    descarga = {gid, errores: [], en_curso: true};
+    pintado = ""; cargar();
+    const r = await fetch(`/api/grados/${gid}/urls`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({urls})}).catch(() => null);
+    const res = await r?.json().catch(() => null);
+    descarga = {gid, errores: r?.ok ? res.filter(x => x.error) : [], en_curso: false};
+    if (!r?.ok) aviso(res?.error || "No se ha podido descargar.");
+    else {
+      if (gradoActual() === gid) $("#urls-texto").value = descarga.errores.map(x => x.url).join("\n");  // quedan las que fallaron, para corregirlas
+      aviso(`${res.length - descarga.errores.length} de ${res.length} ${res.length === 1 ? "URL añadida" : "URL añadidas"}.`);
+    }
+    pintado = ""; return cargar();
+  }
   if (e.target.id !== "ajustes") return;
   e.preventDefault();
   const cfg = {};
@@ -791,10 +989,16 @@ document.addEventListener("submit", async e => {
   if (await post("/api/config", cfg)) { aviso("Ajustes guardados."); pintado = ""; cargar(); }
 });
 let arrastres = 0;
-addEventListener("dragenter", e => { e.preventDefault(); arrastres++; document.body.classList.add("arrastrando"); });
+addEventListener("dragenter", e => {
+  e.preventDefault(); arrastres++; document.body.classList.add("arrastrando");
+  $("#suelta").textContent = gradoActual() ? "Suelta los programas para añadirlos al grado" : "Suelta los PDF para cargarlos";
+});
 addEventListener("dragleave", () => { if (--arrastres <= 0) { arrastres = 0; document.body.classList.remove("arrastrando"); } });
 addEventListener("dragover", e => e.preventDefault());
-addEventListener("drop", e => { e.preventDefault(); arrastres = 0; document.body.classList.remove("arrastrando"); subir(e.dataTransfer.files); });
+addEventListener("drop", e => {
+  e.preventDefault(); arrastres = 0; document.body.classList.remove("arrastrando");
+  gradoActual() ? subirProgramas(gradoActual(), e.dataTransfer.files) : subir(e.dataTransfer.files);
+});
 addEventListener("beforeprint", () => document.querySelectorAll("details").forEach(d => d.open = true));
 addEventListener("hashchange", () => { pintado = ""; cargar(); scrollTo(0, 0); });
 // ---------- lector de la memoria ----------

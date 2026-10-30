@@ -4,9 +4,12 @@
 # dependencies = ["pymupdf>=1.24"]
 # ///
 """Self-check de scripts/pfg.py con PDFs sintéticos. Uso: uv run tests/test_pfg.py"""
+import contextlib
+import io
 import json
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pymupdf
@@ -106,5 +109,90 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (d / "paginas" / "p012.png").read_bytes().startswith(b"\x89PNG")
     assert pymupdf.Pixmap(d / "paginas" / "p012.png").width == round(595 * pfg.DPI / 72)
     assert not [f for f in (d / "paginas").iterdir() if f.name.startswith(".")], "sin temporales"
+
+    # Programas de un grado: lo que escribiría el dashboard en grados/<gid>/.
+    pfg.RAIZ, pfg.GRADOS = Path(tmp), Path(tmp) / "grados"
+
+    def cli(*args):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                pfg.main(list(args))
+                codigo = 0
+            except SystemExit as e:
+                codigo = e.code
+        return codigo, out.getvalue()
+
+    assert cli("grados") == (0, "[]\n")
+    g = pfg.GRADOS / "grado-en-informatica"
+    (g / "programas").mkdir(parents=True)
+    (g / "grado.json").write_text(json.dumps({"nombre": "Grado en Informática", "fuentes": {}}))
+    assert json.loads(cli("grados")[1]) == [{"id": "grado-en-informatica", "nombre": "Grado en Informática"}]
+    # Como las guías de Deusto: ISO-8859-15, la versión inglesa delante y el bloque de contenidos repetido.
+    bloque = ("<div>Titulación:</div><div>14402 - Grado en Informática</div><div>Curso académico:</div><div>2026/27</div>"
+              "<div>Asignatura:</div><div>145320 - Arquitectura</div><div>Curso:</div><div>2024 - Grado en Informática: 3</div>"
+              "<div>Tipo:</div><div>Obligatoria</div><div>Créditos ECTS:</div><div>6.0</div><div>Justificación</div><p>Profesorado y competencias</p>"
+              "<div>Contenidos</div><p>TEMA 1: Rendimiento (Amdahl)</p><p>TEMA 2: Jerarquía de memoria</p>"
+              "<div>Estrategia de enseñanza-aprendizaje, sistema de evaluación y documentación</div><p>Examen final €</p>")
+    html = f"<html><head><style>p {{}}</style><script>var x;</script></head><body><div>Study:</div><div>Teaching/learning strategy</div>{bloque}{bloque}</body></html>"
+    (g / "programas" / "145320.html").write_bytes(html.encode("iso-8859-15"))
+    (g / "programas" / "redes.txt").write_text("Redes\nTema 1. TCP/IP\n")
+    guia = pymupdf.open()
+    guia.new_page().insert_text((72, 72), "Sistemas operativos")
+    guia.new_page().insert_text((72, 72), "Tema 1. Procesos")
+    guia.save(g / "programas" / "so.pdf")
+    codigo, salida = cli("programas", "grado-en-informatica")
+    assert codigo == 2 and salida.splitlines()[1:] == [f"grados/grado-en-informatica/textos/{s}.txt grados/grado-en-informatica/asignaturas/{s}.json"
+                                                       for s in ("145320", "redes", "so")], salida
+    texto = (g / "textos" / "145320.txt").read_text()
+    assert texto.splitlines() == ["Asignatura:", "145320 - Arquitectura", "Titulación:", "14402 - Grado en Informática",
+                                  "Curso:", "2024 - Grado en Informática: 3", "Tipo:", "Obligatoria", "Contenidos",
+                                  "TEMA 1: Rendimiento (Amdahl)", "TEMA 2: Jerarquía de memoria"], texto
+    assert "[[pdf:2]]\nTema 1. Procesos" in (g / "textos" / "so.txt").read_text() and (g / "textos" / "redes.txt").read_text() == "Redes\nTema 1. TCP/IP\n"
+    assert pfg.texto_html("<p>Sin marcadores</p><p>Tema único</p>".encode()) == "Sin marcadores\nTema único\n", "sin marcadores, todo"
+
+    ficha = {"asignatura": "Arquitectura", "codigo": "145320", "curso": 3, "caracter": "obligatoria",
+             "temas": [{"id": "TEMA 1", "texto": "Rendimiento"}, {"id": "TEMA 2", "texto": "Jerarquía de memoria"}]}
+    (g / "asignaturas").mkdir()
+    (g / "asignaturas" / "145320.json").write_text(json.dumps(ficha))
+    (g / "asignaturas" / "redes.json").write_text(json.dumps({**ficha, "codigo": "", "curso": None, "temas": []}))
+    (g / "asignaturas" / "so.json").write_text(json.dumps({**ficha, "caracter": "troncal", "curso": "3"}))
+    codigo, salida = cli("programas", "grado-en-informatica")
+    assert (codigo, salida) == (0, "ninguno\n"), "repetirlo no cambia nada"
+    codigo, salida = cli("validar-grado", "grado-en-informatica")
+    assert codigo == 1 and "asignaturas/so.json.caracter" in salida and "asignaturas/so.json.curso" in salida, salida
+    assert "aviso: asignaturas/redes.json: la guía no tiene contenidos" in salida
+    (g / "asignaturas" / "so.json").write_text(json.dumps(ficha))
+    assert cli("validar-grado", "grado-en-informatica")[0] == 0, "un aviso no es un error"
+    assert json.loads(cli("catalogo", "grado-en-informatica")[1])["145320"] == ficha
+
+    time.sleep(0.01)
+    (g / "programas" / "redes.txt").write_text("Redes II\n")
+    assert cli("programas", "grado-en-informatica")[1].splitlines()[1:] == [
+        "grados/grado-en-informatica/textos/redes.txt grados/grado-en-informatica/asignaturas/redes.json"], "un programa cambiado vuelve a leerse"
+    assert (g / "textos" / "redes.txt").read_text() == "Redes II\n"
+
+    # El contraste de un PFG con su grado.
+    def contraste(**c):
+        (d / "contraste.json").write_text(json.dumps({"grado": "grado-en-informatica", "motivo": "", "aplica": [], "extiende": [], **c}))
+        return pfg.validar(d)
+
+    assert "contraste.json: falta grado.json, que dice con qué grado se contrasta" in contraste()
+    (d / "grado.json").write_text(json.dumps({"grado": "grado-inventado", "titulacion": "Grado en Informática", "pdf": "1"}))
+    problemas = contraste()
+    assert any("no existe el grado 'grado-inventado'" in p for p in problemas) and any("grado.json.pdf" in p for p in problemas)
+    (d / "grado.json").write_text(json.dumps({"grado": "grado-en-informatica", "titulacion": "Grado en Informática", "pdf": 1, "pag": "i"}))
+    aplica = {"texto": "Mide la latencia con caché.", "pdf": 12, "pag": "10", "temas": [{"asignatura": "145320", "tema": "TEMA 2"}]}
+    extiende = {"texto": "Usa CRDT.", "pdf": 20, "pag": "18", "temas": [], "mas_alla": "No aparece en los programas cargados."}
+    assert contraste(aplica=[aplica], extiende=[extiende]) == []
+    assert any("aplica[0].temas: lo que aplica" in p for p in contraste(aplica=[{**aplica, "temas": []}]))
+    assert any("no tiene el tema 'TEMA 9'" in p for p in contraste(aplica=[{**aplica, "temas": [{"asignatura": "145320", "tema": "TEMA 9"}]}]))
+    assert any("no está en asignaturas/" in p for p in contraste(extiende=[{**extiende, "temas": [{"asignatura": "fisica", "tema": "TEMA 1"}]}]))
+    assert any("extiende[0].mas_alla" in p for p in contraste(extiende=[{**extiende, "mas_alla": ""}]))
+    assert any("aplica[0].pdf: debe ser un entero" in p for p in contraste(aplica=[{**aplica, "pdf": "12"}]))
+    assert any("no coincide con grado.json" in p for p in contraste(grado=None))
+    (d / "grado.json").write_text(json.dumps({"grado": None, "titulacion": "Grado en ADE + Grado en Informática", "pdf": 1}))
+    assert contraste(grado=None, motivo="Es un doble grado y no hay ninguno cargado.") == []
+    assert any("aplica: sin grado debe ir vacía" in p for p in contraste(grado=None, aplica=[aplica]))
 
 print("ok")

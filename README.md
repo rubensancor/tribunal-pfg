@@ -4,6 +4,7 @@ Prepara las defensas de Proyecto Fin de Grado:
 
 - Un **dashboard local** donde cargas las memorias en PDF.
 - La skill **`leer-pfg`** trocea cada memoria, la resume por secciones con un modelo barato y escribe la ficha de lectura con el modelo potente.
+- La skill **`grado-pfg`** contrasta cada memoria con los programas de las asignaturas de su grado: qué aplica de lo que se imparte y dónde va más allá.
 - La skill **`preguntas-pfg`** genera preguntas para la defensa y después las clasifica por categorías.
 - Un **lector** en el dashboard para leer la memoria y anotarla. La skill **`anotaciones-pfg`** responde las notas que dirijas al agente.
 
@@ -24,6 +25,7 @@ uv run dashboard/server.py        # abre http://127.0.0.1:8765
 1. Arrastra los PDF al dashboard.
 2. Cada tarjeta muestra el siguiente paso. Cópialo y pégalo en tu agente, abierto en esta carpeta:
    - `usa la skill leer-pfg con el PFG <id>`
+   - `usa la skill grado-pfg con el PFG <id>`, si has cargado programas en **Grados**
    - `usa la skill preguntas-pfg con el PFG <id>`
 3. El dashboard se actualiza solo. Imprime la pestaña Preguntas para llevarla a la defensa.
 
@@ -42,6 +44,18 @@ Selecciona texto y elige qué hacer con él:
 **Nota en esta página** sirve para figuras y tablas. Puedes cambiar el tipo de una nota en cualquier momento. **Enviar N preguntas al agente** lanza `anotaciones-pfg` con el harness de la fila «Respuestas a tus notas» de Ajustes; si editas una nota respondida, vuelve a quedar pendiente.
 
 Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemini Pro.
+
+### Programas del grado
+
+En **Grados → Nuevo grado** escribe el nombre exacto de la titulación, como aparece en la portada de las memorias, por ejemplo «Grado en Ingeniería Informática». Un doble grado es un grado aparte, con su propia lista de asignaturas. Después añade las guías docentes de sus asignaturas en el mismo panel:
+
+- **Archivos**: suelta o elige PDF o `.txt`.
+- **URL**: una por línea. El dashboard las descarga al pulsar **Descargar** (http o https, 20 s y 5 MB como máximo por guía) y deja en el cuadro las que fallen, con el motivo. Si la URL trae `_codAsignatura`, como las de Deusto, esa asignatura sustituye a la anterior con el mismo código.
+- **Pegar texto**: con un nombre opcional; sin nombre, se usa la primera línea.
+
+Carga las guías de la promoción de los PFG: de cada grado se guarda una sola versión. Los programas se leen con un modelo barato la primera vez que se contrasta un PFG de ese grado. Tras la lectura de una memoria, el siguiente paso es **Contrastar con el grado**: un agente barato identifica la titulación en la portada y el modelo principal escribe la pestaña **Grado**, con lo que va más allá de lo que se imparte y lo que aplica, cada cosa con su página y su asignatura y tema. Es un mapa para el tribunal, no una valoración, y solo lista lo que el PFG usa. Si cambias los programas después, la pestaña lo avisa y ofrece **Rehacer el contraste**. Si no se identifica el grado, el PFG sigue a las preguntas.
+
+Todo queda en `grados/`, que no se sube a git.
 
 ## Ejecutar desde el dashboard
 
