@@ -45,6 +45,16 @@ assert server.comando_agente("pi", "", "low", "x")[-2:] == ["--thinking", "low"]
 assert server.comando_agente("agy", "m", "", "x")[-2:] == ["--model", "m"]
 assert server.comando_agente("agy", "m", "max", "x")[-4:] == ["--model", "m", "--effort", "max"]
 
+argv = server.comando_agente("codex", "gpt-6-luna", "xhigh", "x")
+assert argv[:2] == ["codex", "exec"] and "--sandbox" not in argv, "--sandbox y default_permissions no se combinan"
+assert '"**/notas-personales.json"="deny"' in argv[argv.index('permissions.tribunal.extends=":workspace"') + 2]
+assert argv[-3:-1] == ["-c", 'model_reasoning_effort="xhigh"']
+assert "solo puedes ejecutar" not in argv[-1] and ".agents/skills" in argv[-1], "Codex lee con la shell"
+assert server.HARNESSES["codex"]["env"] == {"UV_OFFLINE": "1"}
+assert not any("reasoning" in a for a in server.comando_agente("codex", "", "", "x")) and "--model" not in server.comando_agente("codex", "", "", "x")
+assert server.validar_config({"leer-pfg": {"harness": "codex", "modelo": "gpt-5.6-terra", "esfuerzo": "ultra"}})["leer-pfg"]["esfuerzo"] == "ultra"
+assert "no admite el esfuerzo" in falla(server.validar_config, {"leer-pfg": {"harness": "codex", "esfuerzo": "ultra"}})
+
 assert server.validar_config({"leer-pfg": {"harness": "opencode", "modelo": "opencode/beam-free", "esfuerzo": "xhigh"}})["leer-pfg"]["esfuerzo"] == "xhigh"
 assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "opencode/big-pickle"}})
 assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "anthropic/claude-opus-5-5"}})

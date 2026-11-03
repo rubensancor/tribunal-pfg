@@ -28,7 +28,7 @@ Sus instrucciones están en `.agents/agents/lector-seccion.md`. Usa la primera v
 1. **Subagentes con agentes de proyecto**, que ya traen fijado el modelo barato:
    - Claude Code: Agent/Task con `subagent_type: lector-seccion`.
    - Pi con pi-subagents: agente `lector-seccion`.
-   - Codex: pide explícitamente lanzar el agente `lector-seccion` (definido en `.codex/agents/`).
+   - Codex: pide explícitamente lanzar el agente `lector-seccion` (definido en `.codex/agents/`), sin heredar el contexto de esta conversación (sin fork): el encargo ya lleva todo lo que necesita, y lanzado desde el dashboard Codex no guarda la sesión, así que un subagente con el contexto heredado no arranca.
    - OpenCode: herramienta subagent con el agente `lector-seccion` (definido en `.opencode/agents/`). Usa el modelo de la sesión.
 2. **CLI no interactivo desde la shell**, solo en una sesión interactiva. En modo no interactivo (lanzado desde el dashboard) solo se permiten `uv run scripts/pfg.py` y `python3 -m json.tool`: no busques ni lances otros CLI y pasa a la vía 3. Un proceso por sección, con `&` y `wait`. El prompt es: «Sigue .agents/agents/lector-seccion.md (ignora la cabecera YAML). Lee … y escribe …».
    - `claude -p --model sonnet --permission-mode acceptEdits --allowedTools "Bash(python3 -m json.tool:*)" "<prompt>"`

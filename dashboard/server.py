@@ -62,9 +62,19 @@ def faltan_permisos_agy():
                 f" a permissions.allow en {AGY_SETTINGS}: en modo headless agy deniega lo que no esté permitido.")
 
 
+def perfil_codex():
+    """Perfil de permisos de Codex: el sandbox de :workspace (proyecto, sin red), más la caché de uv, que uv run
+    necesita, y sin las notas personales. Es una regla del sandbox: cubre la shell, archivos nuevos, renombrados y enlaces."""
+    uv = subprocess.run(["uv", "cache", "dir"], capture_output=True, text=True).stdout.strip() or str(Path.home() / ".cache" / "uv")
+    fs = "{" + f'":project_roots"={{{json.dumps("**/" + TIPOS["personal"])}="deny"}},{json.dumps(uv)}="write"' + "}"
+    return ["-c", 'default_permissions="tribunal"', "-c", 'permissions.tribunal.extends=":workspace"',
+            "-c", f"permissions.tribunal.filesystem={fs}"]
+
+
 ESFUERZOS_CLAUDE = ["low", "medium", "high", "xhigh", "max"]
 ESFUERZOS_PI = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 ESFUERZOS_GEMINI = ["low", "medium", "high"]
+ESFUERZOS_CODEX = ["low", "medium", "high", "xhigh", "max"]
 # Gratis en OpenCode Zen y sin entrenar con los datos (opencode.ai/docs/zen). Los demás gratuitos pueden usar las
 # memorias para mejorar el modelo o piden no enviarles datos personales.
 # shortcut: lista fija, revísala cuando Zen cambie sus modelos gratuitos.
@@ -102,6 +112,21 @@ HARNESSES = {
            "nota": "Pi no tiene permisos: puede ejecutar cualquier comando sin preguntar.",
            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--no-session", "--approve", *opcion("--model", modelo),
                                                      *opcion("--thinking", esfuerzo)]},
+    "codex": {"nombre": "Codex", "bin": "codex", "modelos": {"gpt-6-luna": ESFUERZOS_CODEX, "gpt-5.6-luna": ESFUERZOS_CODEX,
+                                                         "gpt-5.6-terra": [*ESFUERZOS_CODEX, "ultra"]},
+              "esfuerzos": ESFUERZOS_CODEX,
+              "nota": "Ejecuta cualquier comando sin preguntar, pero en su sandbox: sin red, sin leer tus notas personales "
+                      "y escribiendo solo en el proyecto y en la caché de uv.",
+              # Codex lee los archivos con la shell, así que el PROMPT general, que la restringe, lo confundiría.
+              "prompt": "{comando}. Estás en modo no interactivo: nadie va a responder preguntas ni a confirmar nada. "
+                        "Ejecuta los comandos desde el directorio actual, que es la raíz del proyecto. Las skills están en "
+                        "`.agents/skills/<nombre>/SKILL.md`. Lee y busca con la shell; tu sandbox no tiene red y "
+                        "bloquea las notas personales.",
+              # Sin red, uv fallaría al revalidar el índice cuando caduca su caché: que resuelva solo con ella.
+              "env": {"UV_OFFLINE": "1"},
+              "args": lambda prompt, modelo, esfuerzo: [
+                  "exec", "--ephemeral", "--skip-git-repo-check", *perfil_codex(), *opcion("--model", modelo),
+                  *opcion("-c", esfuerzo and f'model_reasoning_effort="{esfuerzo}"'), prompt]},
     # --standalone: el servicio de fondo de opencode no vería la configuración de esta carpeta ni la de env.
     "opencode": {"nombre": "OpenCode (modelos gratis)", "bin": "opencode", "modelos": OPENCODE_GRATIS,
                  "esfuerzos": OPENCODE_GRATIS[OPENCODE_DEFECTO], "solo_modelos": True,
@@ -313,7 +338,7 @@ def vista_config():
 
 def comando_agente(harness, modelo, esfuerzo, comando):
     h = HARNESSES[harness]
-    return [h["bin"], *h["args"](PROMPT.format(comando=comando), modelo, esfuerzo)]
+    return [h["bin"], *h["args"](h.get("prompt", PROMPT).format(comando=comando), modelo, esfuerzo)]
 
 
 def ejecucion(pfg_id, paso, con_log=False):

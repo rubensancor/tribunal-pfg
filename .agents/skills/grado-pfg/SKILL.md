@@ -16,7 +16,7 @@ Los pasos 1 y 2 usan agentes baratos. Usa la primera vía que tengas, como en `l
 1. **Subagentes con agentes de proyecto**, que ya traen fijado el modelo barato. Úsalos aunque el trabajo parezca pequeño: así no gastas el modelo principal en leer guías.
    - Claude Code: Agent/Task con `subagent_type: identificador-grado` o `subagent_type: lector-programa`.
    - Pi con pi-subagents: el agente del mismo nombre.
-   - Codex: pide explícitamente lanzar el agente del mismo nombre (definido en `.codex/agents/`).
+   - Codex: pide explícitamente lanzar el agente del mismo nombre (definido en `.codex/agents/`), sin heredar el contexto de esta conversación (sin fork): el encargo ya lleva todo lo que necesita, y lanzado desde el dashboard Codex no guarda la sesión, así que un subagente con el contexto heredado no arranca.
    - OpenCode: herramienta subagent con el agente del mismo nombre (definido en `.opencode/agents/`). Usa el modelo de la sesión.
 2. **CLI no interactivo desde la shell**, solo en una sesión interactiva. En modo no interactivo (lanzado desde el dashboard) solo se permiten `uv run scripts/pfg.py` y `python3 -m json.tool`: pasa a la vía 3. El prompt es «Sigue .agents/agents/<agente>.md (ignora la cabecera YAML). <encargo>».
    - `claude -p --model haiku --permission-mode acceptEdits --allowedTools "Bash(python3 -m json.tool:*)" "<prompt>"`

@@ -1,6 +1,6 @@
 # Ejecutar fases y ajustes
 
-El docente elige en Ajustes qué harness (Claude Code, Antigravity, Pi u OpenCode), qué modelo y qué esfuerzo de razonamiento ejecuta cada fase. Después pulsa el botón de la fase («Leer la memoria con …», «Generar las preguntas con …» o «Clasificar las preguntas con …») en la tarjeta o en el detalle, y el dashboard lanza el agente en modo no interactivo. La tarjeta muestra la ejecución en curso con un botón «Detener». Al terminar se ve el resultado, y en el detalle aparece el registro de la ejecución.
+El docente elige en Ajustes qué harness (Claude Code, Antigravity, Pi, Codex u OpenCode), qué modelo y qué esfuerzo de razonamiento ejecuta cada fase. Después pulsa el botón de la fase («Leer la memoria con …», «Generar las preguntas con …» o «Clasificar las preguntas con …») en la tarjeta o en el detalle, y el dashboard lanza el agente en modo no interactivo. La tarjeta muestra la ejecución en curso con un botón «Detener». Al terminar se ve el resultado, y en el detalle aparece el registro de la ejecución.
 
 ## Sub-features
 
@@ -47,3 +47,4 @@ Preconditions:
 - `claude` atrapa el SIGTERM de «Detener» y sale con 143, así que su tarjeta muestra `Falló: … código 143` en vez de `Detenida`. agy sí muestra `Detenida`.
 - No pruebes agy con `--dangerously-skip-permissions`: el dashboard no lo usa nunca.
 - `$V pdf` solo tiene texto de relleno. `leer-pfg` termina con una ficha casi vacía, pero `preguntas-pfg` se niega con razón a inventar preguntas, así que con estos datos la fase de preguntas no llega a `Listo`. Para recorrerla entera hace falta una memoria sintética con contenido real, que la semilla aún no tiene.
+- Codex se lanza con `--ephemeral` y el perfil de permisos `tribunal` (sin red, sin notas personales). Con `--ephemeral`, un subagente que hereda el contexto falla con `no rollout found`; las skills piden lanzarlos sin fork. Sin red, uv necesita `UV_OFFLINE=1` para no revalidar el índice cuando caduca su caché. Para comprobar que no lee las notas, crea una nota personal con un texto canario (`POST /api/pfgs/<id>/anotaciones/<id de 4+ caracteres>`, `tipo: personal`) y busca el canario fuera de `notas-personales.json` después de la ejecución.
