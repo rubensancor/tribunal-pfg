@@ -38,7 +38,6 @@ b { font-weight: 600; }
 .top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 4px; min-height: 56px; padding-block: 8px; }
 .marca { display: flex; align-items: center; gap: 10px; margin-right: 20px; font-weight: 600; font-size: 15px; color: var(--ink); text-decoration: none; letter-spacing: -.01em; white-space: nowrap; }
 .marca svg { width: 22px; height: 22px; flex: none; }
-.marca span { color: var(--muted); font-weight: 400; }
 .nav { display: flex; gap: 2px; }
 .nav a { padding: 6px 10px; border-radius: var(--radius-control); color: var(--muted); text-decoration: none; font-weight: 500; }
 .nav a:hover { color: var(--ink); }
@@ -359,7 +358,7 @@ body.con-lector.foco { overflow: hidden; }
   body.con-lector .wrap { max-width: none; margin: 0 var(--lw) 0 0; }
   body.con-lector .ficha { grid-template-columns: 1fr; }
   body.con-lector .det-head { flex-direction: column; }
-  body.con-lector .nav, body.con-lector .marca span { display: none; }
+  body.con-lector .nav { display: none; }
   body.con-lector .fila { grid-template-columns: 28px minmax(0, 1fr) 200px; }
   body.con-lector .fila > :is(.cifras, .accion, .ir) { grid-column: 2 / -1; }
   body.con-lector .fila .cifras { display: flex; gap: 12px; text-align: left; }
@@ -416,7 +415,6 @@ button.pag { border: 0; font: inherit; font-size: 12px; font-weight: 500; cursor
   body.con-lector { overflow: hidden; }
 }
 @media (max-width: 1023px) {
-  .marca span { display: none; }
   .fila { grid-template-columns: 28px minmax(0, 1fr) 200px; }
   .fila > :is(.cifras, .accion, .ir) { grid-column: 2 / -1; }
   .fila .cifras { display: flex; flex-wrap: wrap; gap: 0 12px; text-align: left; }
@@ -429,7 +427,7 @@ button.pag { border: 0; font: inherit; font-size: 12px; font-weight: 500; cursor
 }
 @media (max-width: 720px) {
   .wrap { padding: 0 16px; }
-  .marca span, .barra .btn, .top label.btn { display: none; }
+  .barra .btn, .top label.btn { display: none; }
   .marca { margin-right: auto; }
   .nav { order: 3; flex-basis: 100%; margin: 0 -10px; }
   .top .acciones { margin-left: 0; }
@@ -479,7 +477,7 @@ aplicarTema();
 <body>
 <header class="top">
   <div class="wrap">
-    <a class="marca" href="#/"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 2.5h10l4 4v13H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h6M8 12h6M8 15h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 2.5v4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="16.5" cy="16.5" r="3.5" fill="var(--accent)"/></svg>Tribunal PFG <span>preparación de defensas</span></a>
+    <a class="marca" href="#/"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 2.5h10l4 4v13H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h6M8 12h6M8 15h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 2.5v4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="16.5" cy="16.5" r="3.5" fill="var(--accent)"/></svg>Tribunal PFG</a>
     <nav class="nav" aria-label="Secciones"><a href="#/" data-nav="lista">PFG</a><a href="#grados" data-nav="grados">Grados</a><a href="#ajustes" data-nav="ajustes">Ajustes</a></nav>
     <div class="acciones">
       <button class="btn" type="button" id="tema">
