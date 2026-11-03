@@ -31,7 +31,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = Path(os.environ.get("TMPDIR", "/tmp")) / "tribunal-pfg-verify"
-COPIA = ["dashboard/server.py", "dashboard/index.html", "scripts/pfg.py", "config/categorias.json",
+COPIA = ["dashboard/server.py", "dashboard/index.html", "dashboard/fuentes/Geist-Variable.woff2", "scripts/pfg.py", "config/categorias.json",
          "AGENTS.md", "CLAUDE.md",  # los agentes que lanza el dashboard necesitan las reglas y las skills
          *sorted(str(p.relative_to(REPO)) for d in (".agents", ".codex", ".opencode") for p in (REPO / d).rglob("*") if p.is_file())]
 FASES = ["troceado", "leyendo", "leido", "contrastado", "preguntas", "clasificadas"]

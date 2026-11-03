@@ -281,6 +281,8 @@ with tempfile.TemporaryDirectory() as tmp:
     assert pedir("/api/pfgs/notas/anotaciones/ffff6666/borrar", {}, "https://evil.example")[0] == 403
     assert pedir("/api/pfgs/notas/anotaciones/ffff6666/borrar", {})[0] == 200 and "ffff6666" not in notas()
     assert pedir("/api/pfgs/notas/ejecutar", {"fase": "anotaciones-pfg"})[0] == 409, "ya no queda nada pendiente"
+    codigo, cuerpo = pedir("/fuentes/Geist-Variable.woff2")
+    assert codigo == 200 and cuerpo.startswith(b"wOF2")
     codigo, cuerpo = pedir("/pfgs/notas/paginas/p003.json")
     assert codigo == 200 and json.loads(cuerpo)["palabras"][1][4] == "latencia"
     assert pedir("/pfgs/notas/paginas/indice.json")[0] == 200
