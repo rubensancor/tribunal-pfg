@@ -27,6 +27,7 @@ GRADOS = RAIZ / "grados"
 CATEGORIAS = RAIZ / "config" / "categorias.json"
 CONFIG_EJECUCION = RAIZ / "config" / "ejecucion.json"
 INDEX = Path(__file__).resolve().parent / "index.html"
+FUENTE = INDEX.parent / "fuentes" / "Geist-Variable.woff2"  # servida aquí: el dashboard no pide nada a internet
 MAX_SUBIDA = 100 * 1024 * 1024
 MAX_PROGRAMA = 5 * 1024 * 1024
 MAX_URLS = 100
@@ -708,6 +709,8 @@ class Handler(BaseHTTPRequestHandler):
         ruta = urlparse(self.path).path
         if ruta == "/":
             return self.responder(200, INDEX.read_bytes(), "text/html; charset=utf-8")
+        if ruta == "/fuentes/Geist-Variable.woff2":
+            return self.responder(200, FUENTE.read_bytes(), "font/woff2")
         if ruta == "/api/config":
             return self.responder(200, vista_config())
         if ruta == "/api/pfgs":
