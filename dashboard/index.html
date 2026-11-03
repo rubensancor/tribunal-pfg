@@ -351,6 +351,10 @@ body.arrastrando #suelta { display: grid; }
 #lector { position: fixed; z-index: 6; top: 0; right: 0; bottom: 0; width: var(--lw); display: grid; grid-template-rows: auto minmax(0, 1fr);
   background: var(--panel); border-left: 1px solid var(--line); }
 #lector[hidden], #pop[hidden] { display: none; }
+/* Lectura con foco: el lector tapa la ficha y ocupa toda la ventana. */
+body.con-lector.foco #lector { left: 0; width: auto; border-left: 0; }
+body.con-lector.foco { overflow: hidden; }
+[data-foco][aria-pressed="true"] { background: var(--raised); border-color: var(--muted); }
 @media (min-width: 1100px) {
   body.con-lector .wrap { max-width: none; margin: 0 var(--lw) 0 0; }
   body.con-lector .ficha { grid-template-columns: 1fr; }
@@ -408,6 +412,7 @@ button.pag { border: 0; font: inherit; font-size: 12px; font-weight: 500; cursor
 #pop button:hover, #pop button:focus-visible { background: color-mix(in srgb, var(--primary-ink) 16%, var(--primary)); outline: none; }
 @media (max-width: 1099px) {
   #lector { left: 0; width: auto; z-index: 7; border: 0; }
+  [data-foco] { display: none; }  /* aquí el lector ya ocupa toda la ventana */
   body.con-lector { overflow: hidden; }
 }
 @media (max-width: 1023px) {
@@ -493,6 +498,7 @@ aplicarTema();
 <aside id="lector" aria-label="Lector de la memoria" hidden>
   <div class="lector-barra">
     <button class="btn" type="button" data-cerrar-lector aria-label="Cerrar el lector" title="Cerrar (Esc)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <button class="btn" type="button" data-foco aria-pressed="false" aria-label="Ocultar la ficha" title="Ocultar la ficha y leer a toda pantalla"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
     <span class="donde" id="donde" aria-live="polite"></span>
     <button class="btn" type="button" data-mover="-1" aria-label="Página anterior" title="Página anterior (←)">←</button>
     <button class="btn" type="button" data-mover="1" aria-label="Página siguiente" title="Página siguiente (→)">→</button>
@@ -1177,6 +1183,14 @@ async function abrirLector(id, pdf) {
   irA(lector.destino);
 }
 
+function enfocar(si) {
+  document.body.classList.toggle("foco", si);
+  const b = $("[data-foco]"), t = si ? "Mostrar la ficha" : "Ocultar la ficha";
+  b.setAttribute("aria-pressed", si);
+  b.setAttribute("aria-label", t);
+  b.title = si ? "Mostrar la ficha junto al lector" : "Ocultar la ficha y leer a toda pantalla";
+}
+
 function cerrarLector() {
   if (!lector.id) return;
   for (const aid of lector.sucias.keys()) guardarNota(aid);
@@ -1184,6 +1198,7 @@ function cerrarLector() {
   Object.assign(lector, {id: null, paginas: [], palabras: {}, notas: [], sucias: new Map(), datos: null, activa: null});
   $("#lector").hidden = $("#pop").hidden = true;
   document.body.classList.remove("con-lector");
+  enfocar(false);
   $("#hojas").innerHTML = $("#lista-notas").innerHTML = "";
 }
 
@@ -1369,10 +1384,11 @@ $("#pop").addEventListener("click", e => {
   $("#pop").hidden = true;
 });
 $("#lector").addEventListener("click", async e => {
-  const t = e.target.closest("[data-cerrar-lector], [data-mover], [data-zoom], [data-nota-pagina], [data-ver-notas], [data-ir], [data-borrar-nota], [data-enviar-notas], .capa span");
+  const t = e.target.closest("[data-cerrar-lector], [data-foco], [data-mover], [data-zoom], [data-nota-pagina], [data-ver-notas], [data-ir], [data-borrar-nota], [data-enviar-notas], .capa span");
   if (!t) return;
   const d = t.dataset;
   if ("cerrarLector" in d) return cerrarLector();
+  if ("foco" in d) return enfocar(!document.body.classList.contains("foco"));
   if (d.mover) return irA(lector.actual + +d.mover);
   if (d.zoom) { lector.zoom = Math.max(.5, Math.min(3, lector.zoom * (d.zoom > 0 ? 1.2 : 1 / 1.2))); return ajustar(); }
   if ("notaPagina" in d) return crearNota("personal", lector.actual, null, true);
