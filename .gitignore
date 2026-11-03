@@ -4,3 +4,6 @@ grados/
 __pycache__/
 .DS_Store
 config/ejecucion.json
+.taste-skill/
+.agents/skills/design-taste-frontend/
+skills-lock.json
