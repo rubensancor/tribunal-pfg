@@ -65,6 +65,7 @@ En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard la
 |---|---|---|
 | Claude Code | `claude -p … --permission-mode dontAsk` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`; el resto se deniega |
 | Antigravity | `agy -p … --mode accept-edits` | los de tu `settings.json` de agy: añade `"command(uv run scripts/pfg.py)"` y `"command(python3 -m json.tool)"` a `permissions.allow`, o terminará sin hacer nada |
+| Codex | `codex exec -c default_permissions="tribunal" …` | cualquier comando, pero en su sandbox: sin red, sin leer tus notas personales y escribiendo solo en el proyecto y en la caché de uv; el perfil `tribunal` se fija con `-c` |
 | Pi | `pi -p … --no-session --approve` | ninguno: puede ejecutar cualquier comando |
 | OpenCode | `opencode run --standalone --auto -m <modelo>#<esfuerzo>` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`, sin web, sin archivos fuera del proyecto y sin leer tus notas personales (por eso tampoco usa grep); se fijan en `OPENCODE_CONFIG_CONTENT` |
 
