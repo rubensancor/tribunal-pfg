@@ -181,3 +181,7 @@ OpenCode solo admite los modelos gratuitos de OpenCode Zen que no entrenan con l
 uv run tests/test_pfg.py
 uv run tests/test_dashboard.py
 ```
+
+## Licencia
+
+[MIT](LICENSE). La dependencia pymupdf tiene su propia licencia, AGPL-3.0.
