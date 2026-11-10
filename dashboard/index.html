@@ -864,7 +864,7 @@ function vistaHarness([hk, hv]) {
   const estado = ESTADO_HARNESS[hv.estado] + (hv.estado !== "no_instalado" && hv.version ? ` · ${hv.version}` : "");
   return `<li data-harness="${hk}"><div class="cab"><b>${h(hv.nombre)}</b><span class="estado-h ${hv.estado}">${h(estado)}</span></div>
     ${hv.estado === "no_instalado" ? `<p>Para instalarlo, ejecuta en un terminal (macOS y Linux):</p>${comando(hv.instalar.comando)}
-      <p class="muted">Instrucciones oficiales, también para Windows: <a href="${h(hv.instalar.url)}" target="_blank" rel="noopener noreferrer">${h(urlCorta(hv.instalar.url))}</a>.
+      <p class="muted">Instrucciones oficiales: <a href="${h(hv.instalar.url)}" target="_blank" rel="noopener noreferrer">${h(urlCorta(hv.instalar.url))}</a>.
         Después, pulsa «Comprobar de nuevo».</p>` : ""}
     ${hv.estado === "requisito" ? `<p class="pendiente">${h(hv.problema)}</p>` : ""}
     <p class="muted">${h(hv.nota)}</p></li>`;
