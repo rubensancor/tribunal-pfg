@@ -277,7 +277,10 @@ def resumen(d):
         # Un contraste con grado null también cuenta como hecho: sin grado identificado nada se queda atascado.
         estado, paso = "leido", "grado-pfg" if hay_programas() and not (d / "contraste.json").exists() else "preguntas-pfg"
     elif indice:
-        estado, paso = "leyendo", "leer-pfg"
+        # Los archivos no saben si el lector sigue vivo: sin una lectura en curso, la lectura se quedó a medias.
+        e = EJECUCIONES.get(d.name)
+        viva = e and e["fase"] == "leer-pfg" and e["proc"].poll() is None
+        estado, paso = "leyendo" if viva else "a_medias", "leer-pfg"
     else:
         estado, paso = "pendiente", "leer-pfg"
     return {"id": d.name, "estado": estado, "secciones": len(indice), "leidas": leidas,

@@ -113,6 +113,21 @@ with tempfile.TemporaryDirectory() as tmp:
     server.detener(server.EJECUCIONES["demo"])
     esperar("detenida")
 
+    # Con el índice y sin el análisis, «leyendo» solo mientras vive una lectura; si no, se quedó a medias.
+    (d / "secciones").mkdir()
+    (d / "secciones" / "indice.json").write_text(json.dumps([{"n": 1}, {"n": 2}]))
+    (d / "secciones" / "01.json").write_text("{}")
+    r = server.resumen(d)
+    assert (r["estado"], r["paso"], r["leidas"], r["secciones"]) == ("a_medias", "leer-pfg", 1, 2), r
+    server.EJECUCIONES.pop("demo")  # como tras reiniciar el servidor
+    assert server.resumen(d)["estado"] == "a_medias", "sin ejecución viva no está leyendo"
+    server.lanzar(d)
+    assert server.resumen(d)["estado"] == "leyendo", "con la lectura en curso sí"
+    server.detener(server.EJECUCIONES["demo"])
+    esperar("detenida")
+    assert server.resumen(d)["estado"] == "a_medias"
+    server.shutil.rmtree(d / "secciones")
+
     agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
                       'case "$2" in *dormir*|*"PFG lenta"*) sleep 30;; '
                       '*"PFG rota"*) echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json"; exit 3;; '
