@@ -303,6 +303,64 @@ with tempfile.TemporaryDirectory() as tmp:
     assert pedir("/pfgs/notas/paginas/indice.json")[0] == 200
     assert pedir("/pfgs/notas/paginas/p3.png")[0] == 404 and pedir("/pfgs/notas/paginas/../memoria.pdf")[0] == 404
 
+    # Harnesses instalados, con un PATH simulado: codex responde a --version, pi no está, opencode se cuelga
+    # y agy está pero le falta el permiso. --version se pide una vez por binario hasta «Comprobar de nuevo».
+    bins = tmp / "bin"
+    bins.mkdir()
+    llamadas = tmp / "llamadas"
+    (bins / "codex").write_text(f'#!/bin/sh\necho x >> "{llamadas}"\necho "codex-cli 9.1.0"\n')
+    (bins / "opencode").write_text("#!/bin/sh\nsleep 10\n")
+    (bins / "agy").write_text("#!/bin/sh\nexit 1\n")
+    for b in bins.iterdir():
+        b.chmod(0o755)
+    path, claude_bin, requisito = server.os.environ["PATH"], server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"]
+    server.os.environ["PATH"] = str(bins)
+    server.HARNESSES["claude"]["bin"] = "claude"
+    server.HARNESSES["agy"]["requisito"] = lambda: "Añade el permiso."
+    server.VERSIONES.clear()
+    inicio = time.time()
+    hs = server.detectar()
+    assert time.time() - inicio < 5, "un --version colgado no frena la carga más que su timeout"
+    assert {k: v["estado"] for k, v in hs.items()} == {"claude": "no_instalado", "agy": "requisito", "pi": "no_instalado",
+                                                      "codex": "instalado", "opencode": "instalado"}
+    assert hs["codex"] == {"estado": "instalado", "version": "codex-cli 9.1.0", "problema": None}
+    assert hs["opencode"]["version"] is None and hs["agy"]["version"] is None, "sin versión, pero instalado"
+    assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] == "Añade el permiso."
+    codigo, cuerpo = pedir("/api/config")
+    c = json.loads(cuerpo)
+    assert codigo == 200 and set(c) == {"fases", "error", "sistema", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
+    assert c["sistema"] == {"id": server.SISTEMA, "nombre": server.SISTEMAS[server.SISTEMA]}
+    assert server.SISTEMA == {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
+    for k, v in c["harnesses"].items():
+        assert set(v) == {"nombre", "modelos", "esfuerzos", "nota", "instalar", "estado", "version", "problema"}, k
+        assert set(v["instalar"]) == {"comando", "url"} and v["instalar"]["url"].startswith("https://"), k
+    # Cada sistema ve solo su comando: curl en macOS y Linux, PowerShell en Windows. OpenCode no tiene en Windows.
+    sistema = server.SISTEMA
+    for so in ["macos", "linux", "windows"]:
+        server.SISTEMA = so
+        c = server.vista_config()
+        assert c["sistema"]["nombre"] == {"macos": "macOS", "linux": "Linux", "windows": "Windows"}[so]
+        for k, v in c["harnesses"].items():
+            cmd = v["instalar"]["comando"]
+            if so != "windows":
+                assert cmd.startswith("curl -fsSL https://"), (so, k)
+            elif k == "opencode":
+                assert cmd is None and v["instalar"]["url"] == "https://opencode.ai/docs", "solo el enlace"
+            else:
+                assert "irm https://" in cmd and cmd.endswith(("| iex", '| iex"')), k
+    server.SISTEMA = sistema
+    assert c["harnesses"]["codex"]["version"] == "codex-cli 9.1.0" and c["harnesses"]["pi"]["estado"] == "no_instalado"
+    assert llamadas.read_text().count("x") == 1, "la versión sale de la caché"
+    (bins / "pi").write_text("#!/bin/sh\necho 0.9\n")
+    (bins / "pi").chmod(0o755)
+    assert server.detectar()["pi"] == {"estado": "instalado", "version": "0.9", "problema": None}, "lo recién instalado se ve sin reiniciar"
+    assert pedir("/api/config/detectar", {}, "https://evil.example")[0] == 403
+    codigo, cuerpo = pedir("/api/config/detectar", {})
+    assert codigo == 200 and json.loads(cuerpo)["harnesses"]["codex"]["estado"] == "instalado"
+    assert llamadas.read_text().count("x") == 2, "«Comprobar de nuevo» vuelve a pedir la versión"
+    server.os.environ["PATH"] = path
+    server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"] = claude_bin, requisito
+
     # Programas del grado. Las guías se descargan de un servidor local, no de internet. La de Deusto tarda 2 s.
     simultaneas, pedidas = {"ahora": 0, "max": 0}, []
     contar = threading.Lock()
