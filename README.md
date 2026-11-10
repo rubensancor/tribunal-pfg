@@ -10,24 +10,108 @@ Prepara las defensas de Proyecto Fin de Grado:
 
 Funciona con Claude Code, Codex, Pi, Antigravity y OpenCode: las skills están en `.agents/skills/`. La IA prepara y el tribunal juzga: el sistema no pone notas.
 
-## Requisitos
+Las memorias contienen datos personales y trabajo sin publicar. Se quedan en tu ordenador, en `pfgs/`, pero su contenido llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
 
-- [uv](https://docs.astral.sh/uv/), que se encarga de Python y de la única dependencia, pymupdf.
-- Uno de los agentes: Claude Code, Codex, Pi (con [pi-subagents](https://github.com/tintinweb/pi-subagents) para que los lectores usen un modelo barato), Antigravity u OpenCode.
+## Instalación con agente
 
-## Uso
+Si ya tienes un agente (Claude Code, Codex u otro), deja que lo instale él. Abre el agente en la carpeta donde quieras guardar la herramienta y pega este texto. Cambia antes `<URL del repositorio>` por la dirección que te hayan pasado.
 
-```bash
-git clone <repo> tribunal-pfg && cd tribunal-pfg
-uv run dashboard/server.py        # abre http://127.0.0.1:8765
+```text
+Instala Tribunal PFG en esta carpeta, paso a paso. Antes de instalar cualquier
+cosa en el sistema, dime qué vas a instalar y con qué comando, y espera a que lo confirme.
+
+1. Comprueba si uv está instalado (uv --version). Si falta, propón el instalador
+   oficial de https://docs.astral.sh/uv/getting-started/installation/ para mi sistema.
+2. Comprueba si git está instalado (git --version). Si falta, dime cómo instalarlo
+   desde https://git-scm.com/downloads, o descarga el ZIP del repositorio.
+3. Clona el repositorio: git clone <URL del repositorio> tribunal-pfg
+4. Entra en tribunal-pfg y arranca el dashboard en segundo plano: uv run dashboard/server.py
+5. Abre http://127.0.0.1:8765 en el navegador.
+6. Abre la pantalla Ajustes del dashboard y dime qué harnesses aparecen como
+   instalados y cuáles faltan. No instales ninguno sin preguntarme.
 ```
 
+Al terminar tendrás el dashboard abierto. Sigue en [Uso diario](#uso-diario).
+
+## Instalación manual
+
+Necesitas un terminal: en macOS, la app **Terminal**; en Windows, **PowerShell**. Copia cada comando, pégalo y pulsa Intro.
+
+### 1. Instala uv
+
+[uv](https://docs.astral.sh/uv/) se encarga de Python y de la única dependencia, pymupdf. Comprueba si ya lo tienes con `uv --version`. Si no, instálalo con el [instalador oficial](https://docs.astral.sh/uv/getting-started/installation/):
+
+- macOS y Linux:
+
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+
+- Windows (PowerShell):
+
+  ```powershell
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
+
+Después, cierra el terminal y abre otro, para que encuentre `uv`.
+
+### 2. Descarga Tribunal PFG
+
+Con [git](https://git-scm.com/downloads):
+
+```bash
+git clone <URL del repositorio> tribunal-pfg
+cd tribunal-pfg
+```
+
+`<URL del repositorio>` es la dirección que te hayan pasado. El repositorio es privado: tu cuenta de GitHub necesita acceso.
+
+Sin git, descarga el ZIP desde la página del repositorio en GitHub (**Code → Download ZIP**), descomprímelo y entra en esa carpeta con `cd`. En Windows, lee antes [Windows](#windows).
+
+### 3. Arranca el dashboard
+
+Dentro de la carpeta `tribunal-pfg`:
+
+```bash
+uv run dashboard/server.py
+```
+
+La primera vez tarda un poco: uv descarga Python y pymupdf. Abre http://127.0.0.1:8765 en el navegador. Deja el terminal abierto mientras lo uses; para pararlo, pulsa Ctrl+C. Si quieres otro puerto, añádelo al final: `uv run dashboard/server.py 8770`.
+
+Cada día, para volver a usarlo, abre un terminal, entra en la carpeta con `cd` y repite este paso.
+
+### 4. Instala un agente
+
+Las skills necesitan un agente, que aquí llamamos harness. Basta con uno. En **Ajustes** el dashboard muestra qué harnesses tienes, con su versión, y para los que faltan el comando de instalación de tu sistema y su página oficial. Después de instalar uno, pulsa **Comprobar de nuevo**.
+
+Los comandos oficiales:
+
+| Harness | macOS y Linux | Windows (PowerShell) |
+|---|---|---|
+| [Claude Code](https://code.claude.com/docs/en/setup) | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
+| [Codex](https://learn.chatgpt.com/docs/codex/cli) | `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | mira su página |
+| [Pi](https://pi.dev) | `curl -fsSL https://pi.dev/install.sh \| sh` | `powershell -c "irm https://pi.dev/install.ps1 \| iex"` |
+| [Antigravity](https://antigravity.google/docs/getting-started?tab=cli) | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` | `irm https://antigravity.google/cli/install.ps1 \| iex` |
+| [OpenCode](https://opencode.ai/docs) | `curl -fsSL https://opencode.ai/v2/install \| bash` | sin instalador: descarga el binario de su página |
+
+Con Pi, instala también [pi-subagents](https://github.com/tintinweb/pi-subagents) para que los lectores usen un modelo barato. Con Antigravity, revisa los permisos en [Detalles de cada harness](#detalles-de-cada-harness).
+
+## Uso diario
+
 1. Arrastra los PDF al dashboard.
-2. Cada tarjeta muestra el siguiente paso. Cópialo y pégalo en tu agente, abierto en esta carpeta:
+2. Cada tarjeta muestra el siguiente paso. Pulsa su botón, como **Leer la memoria con Claude Code**, o copia el comando y pégalo en tu agente, abierto en la carpeta `tribunal-pfg`:
    - `usa la skill leer-pfg con el PFG <id>`
    - `usa la skill grado-pfg con el PFG <id>`, si has cargado programas en **Grados**
    - `usa la skill preguntas-pfg con el PFG <id>`
 3. El dashboard se actualiza solo. Imprime la pestaña Preguntas para llevarla a la defensa.
+
+Si marcas **Leer y preguntar al cargar**, cada PDF que subas se lee, se contrasta con su grado si hay programas y genera sus preguntas, con los harnesses de Ajustes.
+
+Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemini Pro.
+
+### Ejecutar desde el dashboard
+
+El botón de cada tarjeta lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el harness, el modelo y el esfuerzo de razonamiento de cada fase; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
 
 ### Leer y anotar la memoria
 
@@ -43,8 +127,6 @@ Selecciona texto y elige qué hacer con él:
 
 **Nota en esta página** sirve para figuras y tablas. Puedes cambiar el tipo de una nota en cualquier momento. **Enviar N preguntas al agente** lanza `anotaciones-pfg` con el harness de la fila «Respuestas a tus notas» de Ajustes; si editas una nota respondida, vuelve a quedar pendiente.
 
-Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemini Pro.
-
 ### Programas del grado
 
 En **Grados → Nuevo grado** escribe el nombre exacto de la titulación, como aparece en la portada de las memorias, por ejemplo «Grado en Ingeniería Informática». Un doble grado es un grado aparte, con su propia lista de asignaturas. Después añade las guías docentes de sus asignaturas en el mismo panel:
@@ -57,9 +139,17 @@ Carga las guías de la promoción de los PFG: de cada grado se guarda una sola v
 
 Todo queda en `grados/`, que no se sube a git.
 
-## Ejecutar desde el dashboard
+### Categorías
 
-En vez de copiar el comando, puedes pulsar **Ejecutar con …**: el dashboard lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el harness, el modelo y el esfuerzo de razonamiento de cada fase; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
+Están en `config/categorias.json`; edítalas libremente. Las preguntas se generan **sin conocer las categorías** y un agente aparte las clasifica después. Así no aparece una pregunta por categoría solo porque la categoría existe. Que una categoría se quede vacía es normal.
+
+## Privacidad
+
+Las memorias y tus notas se quedan en `pfgs/`, que no se sube a git. Las notas personales no las lee ningún agente. Para quitar una, pulsa **Borrar** en su detalle; para quitar varias, márcalas en la lista y pulsa **Borrar seleccionados**. En los dos casos se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
+
+## Detalles de cada harness
+
+### Permisos al ejecutar desde el dashboard
 
 | Harness | Se lanza con | Permisos |
 |---|---|---|
@@ -73,7 +163,7 @@ Las memorias son texto ajeno que el agente lee: con Pi, una instrucción escondi
 
 OpenCode solo admite los modelos gratuitos de OpenCode Zen que no entrenan con lo que reciben: `opencode/glm-5.3-flash-free` (el de por defecto), `opencode/deepseek-v4.1-flash-free` y `opencode/beam-free`. Los demás gratuitos pueden usar los datos para mejorar el modelo o piden no enviarles datos personales ([condiciones de Zen](https://opencode.ai/docs/zen/)).
 
-## Modelos baratos por harness
+### Modelos baratos
 
 | Harness | Dónde se fija |
 |---|---|
@@ -83,17 +173,9 @@ OpenCode solo admite los modelos gratuitos de OpenCode Zen que no entrenan con l
 | OpenCode | `.opencode/agents/*.md`: heredan el modelo gratuito de la sesión |
 | Antigravity | sin subagentes: el agente principal lee las secciones una a una |
 
-## Categorías
-
-Están en `config/categorias.json`; edítalas libremente. Las preguntas se generan **sin conocer las categorías** y un agente aparte las clasifica después. Así no aparece una pregunta por categoría solo porque la categoría existe. Que una categoría se quede vacía es normal.
-
-## Privacidad
-
-Las memorias y tus notas se quedan en `pfgs/`, que no se sube a git. Las notas personales no las lee ningún agente. Para quitar una, pulsa **Borrar** en su detalle; para quitar varias, márcalas en la lista y pulsa **Borrar seleccionados**. En los dos casos se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
-
 ## Windows
 
-`.claude/skills` y `.claude/agents` son enlaces simbólicos. Si git los clona como archivos de texto, activa `git config core.symlinks true` (requiere el modo desarrollador) o copia esas carpetas desde `.agents/`.
+`.claude/skills` y `.claude/agents` son enlaces simbólicos. Si git los clona como archivos de texto, activa `git config core.symlinks true` (requiere el modo desarrollador) o copia esas carpetas desde `.agents/`. Si descargaste el ZIP y las skills no aparecen en tu agente, haz lo mismo: copia esas carpetas desde `.agents/`.
 
 ## Desarrollo
 

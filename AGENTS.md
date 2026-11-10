@@ -36,4 +36,6 @@ El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También p
 ## Desarrollo
 
 - Test: `uv run tests/test_pfg.py` y `uv run tests/test_dashboard.py`
+- Para ver en la app un estado con ejecución viva sin gastar un agente, arranca verify-tribunal con `PATH=<carpeta con un claude falso que hace sleep>:$PATH`.
+- Para probar Ajustes con harnesses que faltan, arranca verify-tribunal con `PATH=<carpeta con enlaces a uv y a los harnesses que quieras>:/usr/bin:/bin`; con HOME vacío, agy sale con el permiso pendiente.
 - Las instrucciones de los subagentes están en `.agents/agents/*.md`, que es la fuente única. `.claude/agents` es un enlace a esa carpeta, `.codex/agents/*.toml` solo apunta a esos archivos y fija el modelo de Codex, y `.opencode/agents/*.md` solo apunta a ellos y hereda el modelo de la sesión.
