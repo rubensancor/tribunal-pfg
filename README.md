@@ -14,7 +14,7 @@ Las memorias contienen datos personales y trabajo sin publicar. Se quedan en tu 
 
 ## Instalación con agente
 
-Si ya tienes un agente (Claude Code, Codex u otro), deja que lo instale él. Abre el agente en la carpeta donde quieras guardar la herramienta y pega este texto. Cambia antes `<URL del repositorio>` por la dirección que te hayan pasado.
+Si ya tienes un agente (Claude Code, Codex u otro), deja que lo instale él. Abre el agente en la carpeta donde quieras guardar la herramienta y pega este texto.
 
 ```text
 Instala Tribunal PFG en esta carpeta, paso a paso. Antes de instalar cualquier
@@ -24,7 +24,7 @@ cosa en el sistema, dime qué vas a instalar y con qué comando, y espera a que 
    oficial de https://docs.astral.sh/uv/getting-started/installation/ para mi sistema.
 2. Comprueba si git está instalado (git --version). Si falta, dime cómo instalarlo
    desde https://git-scm.com/downloads, o descarga el ZIP del repositorio.
-3. Clona el repositorio: git clone <URL del repositorio> tribunal-pfg
+3. Clona el repositorio: git clone https://github.com/rubensancor/tribunal-pfg.git tribunal-pfg
 4. Entra en tribunal-pfg y arranca el dashboard en segundo plano: uv run dashboard/server.py
 5. Abre http://127.0.0.1:8765 en el navegador.
 6. Abre la pantalla Ajustes del dashboard y dime qué harnesses aparecen como
@@ -60,11 +60,9 @@ Después, cierra el terminal y abre otro, para que encuentre `uv`.
 Con [git](https://git-scm.com/downloads):
 
 ```bash
-git clone <URL del repositorio> tribunal-pfg
+git clone https://github.com/rubensancor/tribunal-pfg.git tribunal-pfg
 cd tribunal-pfg
 ```
-
-`<URL del repositorio>` es la dirección que te hayan pasado. El repositorio es privado: tu cuenta de GitHub necesita acceso.
 
 Sin git, descarga el ZIP desde la página del repositorio en GitHub (**Code → Download ZIP**), descomprímelo y entra en esa carpeta con `cd`. En Windows, lee antes [Windows](#windows).
 
