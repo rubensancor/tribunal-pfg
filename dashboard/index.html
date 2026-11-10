@@ -649,7 +649,7 @@ function etapa(p) {
   const hechos = {pendiente: 0, leyendo: 0, a_medias: 0, leido: 1, preguntas: 2, clasificadas: 3}[p.estado];
   const leyendo = ["leyendo", "a_medias"].includes(p.estado) && p.leidas < p.secciones;
   const detalle = {leyendo: leyendo ? `${p.leidas}/${p.secciones} secciones leídas` : "sintetizando la ficha",
-    a_medias: leyendo ? `${p.leidas}/${p.secciones} secciones leídas` : "falta la ficha",
+    a_medias: leyendo ? `${p.leidas}/${p.secciones} secciones` : "falta la ficha",
     leido: p.paso === "grado-pfg" ? "falta el contraste con el grado" : "faltan las preguntas"}[p.estado];
   return `<div class="etapa"><div class="pista${p.estado === "a_medias" ? " parada" : ""}" aria-hidden="${!leyendo}">${["Lectura", "Preguntas", "Clasificación"].map((t, i) =>
     `<span class="${i < hechos ? "hecho" : i === hechos ? "ahora" : ""}" title="${t}">${i === hechos && leyendo
