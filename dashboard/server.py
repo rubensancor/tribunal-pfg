@@ -93,10 +93,12 @@ OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDO
 # Cómo lanza cada harness una fase sin interacción. Cada uno controla los permisos a su manera.
 # «modelos» son las sugerencias con los niveles de esfuerzo que acepta cada una; «esfuerzos», los del modelo por
 # defecto y los que no están en la lista. agy rechaza --effort con los modelos que fijan el nivel en el nombre.
-# «instalar» es el comando oficial para macOS y Linux, copiado de la página de «url»: el dashboard solo lo muestra.
+# «instalar» son los comandos oficiales de macOS y Linux (unix) y de PowerShell (windows), copiados de la página de
+# «url», o None si no hay. El dashboard solo muestra el del sistema donde corre: nunca los ejecuta.
 HARNESSES = {
     "claude": {"nombre": "Claude Code", "bin": "claude",
-               "instalar": {"comando": "curl -fsSL https://claude.ai/install.sh | bash", "url": "https://code.claude.com/docs/en/setup"},
+               "instalar": {"unix": "curl -fsSL https://claude.ai/install.sh | bash", "windows": "irm https://claude.ai/install.ps1 | iex",
+                            "url": "https://code.claude.com/docs/en/setup"},
                "modelos": dict.fromkeys(["opus", "sonnet", "haiku"], ESFUERZOS_CLAUDE),
                "esfuerzos": ESFUERZOS_CLAUDE,
                "nota": "Solo puede ejecutar scripts/pfg.py y python3 -m json.tool; deniega el resto sin preguntar.",
@@ -105,7 +107,8 @@ HARNESSES = {
                    *opcion("--effort", esfuerzo), "--allowedTools",
                    " ".join(["Read", "Write", "Edit", "Glob", "Grep", "Agent", *(f"Bash({c}:*)" for c in COMANDOS_SKILLS)])]},
     "agy": {"nombre": "Antigravity (agy)", "bin": "agy",
-            "instalar": {"comando": "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+            "instalar": {"unix": "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+                         "windows": "irm https://antigravity.google/cli/install.ps1 | iex",
                          "url": "https://antigravity.google/docs/getting-started?tab=cli"},
             "modelos": {"gemini-3.8-flash": ESFUERZOS_GEMINI, "gemini-3.8-flash-high": [],
                                                        "claude-opus-4-6-thinking": []},
@@ -114,14 +117,17 @@ HARNESSES = {
             "requisito": faltan_permisos_agy,
             "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", *opcion("--model", modelo),
                                                      *opcion("--effort", esfuerzo)]},
-    "pi": {"nombre": "Pi", "bin": "pi", "instalar": {"comando": "curl -fsSL https://pi.dev/install.sh | sh", "url": "https://pi.dev"},
+    "pi": {"nombre": "Pi", "bin": "pi", "instalar": {"unix": "curl -fsSL https://pi.dev/install.sh | sh",
+                                                "windows": 'powershell -c "irm https://pi.dev/install.ps1 | iex"', "url": "https://pi.dev"},
            "modelos": {"openai-codex/gpt-6-luna": ESFUERZOS_PI},
            "esfuerzos": ESFUERZOS_PI,
            "nota": "Pi no tiene permisos: puede ejecutar cualquier comando sin preguntar.",
            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--no-session", "--approve", *opcion("--model", modelo),
                                                      *opcion("--thinking", esfuerzo)]},
     "codex": {"nombre": "Codex", "bin": "codex",
-              "instalar": {"comando": "curl -fsSL https://chatgpt.com/codex/install.sh | sh", "url": "https://learn.chatgpt.com/docs/codex/cli"},
+              "instalar": {"unix": "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+                           "windows": 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+                           "url": "https://learn.chatgpt.com/docs/codex/cli"},
               "modelos": {"gpt-6-luna": ESFUERZOS_CODEX, "gpt-5.6-luna": ESFUERZOS_CODEX,
                                                          "gpt-5.6-terra": [*ESFUERZOS_CODEX, "ultra"]},
               "esfuerzos": ESFUERZOS_CODEX,
@@ -139,7 +145,9 @@ HARNESSES = {
                   *opcion("-c", esfuerzo and f'model_reasoning_effort="{esfuerzo}"'), prompt]},
     # --standalone: el servicio de fondo de opencode no vería la configuración de esta carpeta ni la de env.
     "opencode": {"nombre": "OpenCode (modelos gratis)", "bin": "opencode",
-                 "instalar": {"comando": "curl -fsSL https://opencode.ai/v2/install | bash", "url": "https://opencode.ai/docs"},
+                 # En Windows, OpenCode no tiene instalador: solo un binario que se descarga de su página.
+                 "instalar": {"unix": "curl -fsSL https://opencode.ai/v2/install | bash", "windows": None,
+                              "url": "https://opencode.ai/docs"},
                  "modelos": OPENCODE_GRATIS,
                  "esfuerzos": OPENCODE_GRATIS[OPENCODE_DEFECTO], "solo_modelos": True,
                  "nota": "Solo modelos gratuitos de OpenCode Zen que no entrenan con los datos. Solo puede ejecutar "
@@ -335,6 +343,9 @@ def config_ejecucion():
         return validar_config({})
 
 
+# El servidor corre en el ordenador del docente: su sistema es el del docente.
+SISTEMA = "windows" if sys.platform == "win32" else "macos" if sys.platform == "darwin" else "linux"
+SISTEMAS = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
 VERSIONES = {}  # ruta del binario -> primera línea de su --version; «Comprobar de nuevo» la vacía
 
 
@@ -377,9 +388,11 @@ def vista_config(forzar=False):
     except ValueError as e:
         error = f"{CONFIG_EJECUCION.name} no es válido y se usan los valores por defecto: {e}"
     estados = detectar(forzar)
+    so = "windows" if SISTEMA == "windows" else "unix"
     return {"fases": {f: {"nombre": FASES[f], **c} for f, c in config_ejecucion().items()}, "error": error,
+            "sistema": {"id": SISTEMA, "nombre": SISTEMAS[SISTEMA]},
             "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "esfuerzos": h["esfuerzos"], "nota": h["nota"],
-                              "instalar": h["instalar"], **estados[k]}
+                              "instalar": {"comando": h["instalar"][so], "url": h["instalar"]["url"]}, **estados[k]}
                           for k, h in HARNESSES.items()}}
 
 

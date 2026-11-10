@@ -313,10 +313,27 @@ with tempfile.TemporaryDirectory() as tmp:
     assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] == "Añade el permiso."
     codigo, cuerpo = pedir("/api/config")
     c = json.loads(cuerpo)
-    assert codigo == 200 and set(c) == {"fases", "error", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
+    assert codigo == 200 and set(c) == {"fases", "error", "sistema", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
+    assert c["sistema"] == {"id": server.SISTEMA, "nombre": server.SISTEMAS[server.SISTEMA]}
+    assert server.SISTEMA == {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
     for k, v in c["harnesses"].items():
         assert set(v) == {"nombre", "modelos", "esfuerzos", "nota", "instalar", "estado", "version", "problema"}, k
-        assert v["instalar"]["url"].startswith("https://") and v["instalar"]["comando"].startswith("curl -fsSL https://"), k
+        assert set(v["instalar"]) == {"comando", "url"} and v["instalar"]["url"].startswith("https://"), k
+    # Cada sistema ve solo su comando: curl en macOS y Linux, PowerShell en Windows. OpenCode no tiene en Windows.
+    sistema = server.SISTEMA
+    for so in ["macos", "linux", "windows"]:
+        server.SISTEMA = so
+        c = server.vista_config()
+        assert c["sistema"]["nombre"] == {"macos": "macOS", "linux": "Linux", "windows": "Windows"}[so]
+        for k, v in c["harnesses"].items():
+            cmd = v["instalar"]["comando"]
+            if so != "windows":
+                assert cmd.startswith("curl -fsSL https://"), (so, k)
+            elif k == "opencode":
+                assert cmd is None and v["instalar"]["url"] == "https://opencode.ai/docs", "solo el enlace"
+            else:
+                assert "irm https://" in cmd and cmd.endswith(("| iex", '| iex"')), k
+    server.SISTEMA = sistema
     assert c["harnesses"]["codex"]["version"] == "codex-cli 9.1.0" and c["harnesses"]["pi"]["estado"] == "no_instalado"
     assert llamadas.read_text().count("x") == 1, "la versión sale de la caché"
     (bins / "pi").write_text("#!/bin/sh\necho 0.9\n")

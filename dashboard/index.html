@@ -860,17 +860,21 @@ const ESTADO_HARNESS = {instalado: "Instalado", no_instalado: "No instalado", re
 const faltaHarness = hk => ({no_instalado: "No está instalado: instálalo abajo antes de ejecutar esta fase.",
   requisito: "Le falta un permiso: míralo abajo."})[harnesses[hk]?.estado] || "";
 const urlCorta = u => u.replace(/^https:\/\//, "").replace(/\/$/, "");
+let sistema = {id: "", nombre: ""};  // el del ordenador donde corre el servidor, que es el del docente
 function vistaHarness([hk, hv]) {
+  const enlace = `<a href="${h(hv.instalar.url)}" target="_blank" rel="noopener noreferrer">${h(urlCorta(hv.instalar.url))}</a>`;
   const estado = ESTADO_HARNESS[hv.estado] + (hv.estado !== "no_instalado" && hv.version ? ` · ${hv.version}` : "");
   return `<li data-harness="${hk}"><div class="cab"><b>${h(hv.nombre)}</b><span class="estado-h ${hv.estado}">${h(estado)}</span></div>
-    ${hv.estado === "no_instalado" ? `<p>Para instalarlo, ejecuta en un terminal (macOS y Linux):</p>${comando(hv.instalar.comando)}
-      <p class="muted">Instrucciones oficiales: <a href="${h(hv.instalar.url)}" target="_blank" rel="noopener noreferrer">${h(urlCorta(hv.instalar.url))}</a>.
-        Después, pulsa «Comprobar de nuevo».</p>` : ""}
+    ${hv.estado !== "no_instalado" ? "" : hv.instalar.comando
+      ? `<p>Para instalarlo en ${h(sistema.nombre)}, ejecuta en ${sistema.id === "windows" ? "PowerShell" : "un terminal"}:</p>${comando(hv.instalar.comando)}
+        <p class="muted">Instrucciones oficiales: ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`
+      : `<p>En ${h(sistema.nombre)} no tiene un comando de instalación: descárgalo desde su página oficial, ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`}
     ${hv.estado === "requisito" ? `<p class="pendiente">${h(hv.problema)}</p>` : ""}
     <p class="muted">${h(hv.nota)}</p></li>`;
 }
 function vistaAjustes(c) {
   harnesses = c.harnesses;
+  sistema = c.sistema;
   const fila = ([k, f]) => `<tr><td>${h(f.nombre)}</td>
     <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" aria-describedby="falta-${k}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
       `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}${hv.estado === "no_instalado" ? " (no instalado)" : ""}</option>`).join("")}</select>
@@ -886,7 +890,7 @@ function vistaAjustes(c) {
       <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
       ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
       <button class="btn primary" type="submit">Guardar</button></form>
-    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>Harnesses en este ordenador</h3>
+    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>Harnesses en este ordenador (${h(c.sistema.nombre)})</h3>
       <button class="btn" type="button" data-detectar>Comprobar de nuevo</button></div>
       <ul class="harnesses">${Object.entries(c.harnesses).map(vistaHarness).join("")}</ul></div>`;
 }
