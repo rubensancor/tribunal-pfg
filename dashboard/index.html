@@ -95,6 +95,8 @@ h1 + p { margin-top: 0; }
 .pista span.hecho { background: var(--ink); }
 .pista span.ahora { background: color-mix(in srgb, var(--accent) 22%, var(--line)); }
 .pista i { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width .4s; }
+.pista.parada span.ahora { background: var(--line); }
+.pista.parada i { background: var(--muted); }
 .etapa .estado-texto { font-size: 13px; line-height: 1.35; }
 .etapa .estado-texto .muted { white-space: nowrap; }
 
@@ -114,9 +116,11 @@ body:has(#seleccion.visible) #main { padding-bottom: 96px; }
 .badge { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 12px; font-weight: 500; line-height: 20px; padding: 0 8px; border-radius: 4px; background: var(--raised); color: var(--ink); white-space: nowrap; vertical-align: 1px; }
 .badge.leyendo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .badge.clasificadas { background: var(--ok-soft); color: var(--ok); }
+.badge.a_medias { background: var(--warn-soft); color: var(--warn); }
 
 .prog { height: 6px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .prog div { height: 100%; background: var(--accent); transition: width .4s; }
+.prog.parada div { background: var(--muted); }
 
 .panel-cola { display: grid; gap: 4px; margin: 0 0 16px; padding: 16px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .panel-cola h2 { margin: 0; font-size: 15px; font-weight: 500; }
@@ -533,7 +537,7 @@ const $ = s => document.querySelector(s);
 const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const lista = x => Array.isArray(x) ? x : [];
 const MAX = 100 * 1024 * 1024, MAX_PROGRAMA = 5 * 1024 * 1024;
-const ESTADOS = {pendiente: "Pendiente de leer", leyendo: "Leyendo", leido: "Leído", preguntas: "Preguntas sin clasificar", clasificadas: "Listo"};
+const ESTADOS = {pendiente: "Pendiente de leer", leyendo: "Leyendo", a_medias: "Lectura a medias", leido: "Leído", preguntas: "Preguntas sin clasificar", clasificadas: "Listo"};
 const TENSIONES = {sin_justificar: "Sin justificar", sin_evidencia: "Sin evidencia", incoherencia: "Incoherencia",
   validacion_debil: "Validación débil", limite_no_explorado: "Límite no explorado", cambio_de_nivel: "Cambio de nivel"};
 let pintado = "", hashPintado = "";  // última respuesta pintada: solo se repinta si algo cambia
@@ -549,7 +553,7 @@ const comando = c => `<div class="cmd"><code>${h(c)}</code><button class="btn" t
 // antes de leer la memoria no hay título: el id sale del nombre del archivo
 const titulo = p => p.titulo !== p.id ? p.titulo : p.id.replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
 const ACCION = {"leer-pfg": "Leer la memoria", "grado-pfg": "Contrastar con el grado", "preguntas-pfg": "Generar las preguntas"};
-const accion = p => p.estado === "preguntas" ? "Clasificar las preguntas" : ACCION[p.paso];
+const accion = p => p.estado === "preguntas" ? "Clasificar las preguntas" : p.estado === "a_medias" ? "Retomar la lectura" : ACCION[p.paso];
 const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Falló", detenida: "Detenida",
   sin_avance: "Terminó sin completar la fase"};
 const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""}${e.despues && e.estado === "en_curso" ? ` · luego, ${h(e.despues.toLowerCase())}` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
@@ -570,6 +574,11 @@ const progreso = p => p.leidas < p.secciones
   ? `<div class="prog" role="progressbar" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}"><div style="width:${100 * p.leidas / p.secciones}%"></div></div>
      <span class="muted">${p.leidas}/${p.secciones} secciones leídas</span>`
   : `<span class="muted">Secciones leídas · sintetizando…</span>`;
+// Sin nadie leyendo: lo que se llegó a leer, quieto, y que se puede retomar donde se quedó.
+const aMedias = p => (p.leidas < p.secciones
+  ? `<div class="prog parada" role="progressbar" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}"><div style="width:${100 * p.leidas / p.secciones}%"></div></div>
+     <span class="muted">${p.leidas}/${p.secciones} secciones leídas · la lectura se paró antes de terminar</span>`
+  : `<span class="muted">Secciones leídas · la lectura se paró antes de escribir la ficha</span>`);
 
 // ---------- vistas ----------
 const seleccion = new Set();  // ids marcados en la lista; las casillas se repintan cada 4 s
@@ -621,7 +630,7 @@ function rejilla(pfgs) {
       <li>Después propone preguntas para la defensa, ordenadas por prioridad.</li><li>El tribunal decide: la herramienta no califica.</li></ol>`);
   const n = e => pfgs.filter(p => e.includes(p.estado)).length;
   const listos = n(["clasificadas"]);
-  const partes = [[n(["pendiente", "leyendo"]), "por leer"], [n(["leido", "preguntas"]), "en preparación"],
+  const partes = [[n(["pendiente", "leyendo", "a_medias"]), "por leer"], [n(["leido", "preguntas"]), "en preparación"],
     [listos, listos === 1 ? "listo para la defensa" : "listos para la defensa"]].filter(([k]) => k);
   return `<h1>PFG</h1><p class="resumen"><b>${pfgs.length}</b> PFG ${pfgs.length === 1 ? "cargado" : "cargados"}: ${partes.map(([k, t]) => `<span><b>${k}</b> ${t}</span>`).join(" · ")}</p>
     ${panelCola(pfgs)}<div class="filas">${pfgs.map(p => `
@@ -637,11 +646,12 @@ function rejilla(pfgs) {
 
 // La pista de preparación: lectura, preguntas y clasificación. La lectura en curso se dibuja a su proporción real.
 function etapa(p) {
-  const hechos = {pendiente: 0, leyendo: 0, leido: 1, preguntas: 2, clasificadas: 3}[p.estado];
-  const leyendo = p.estado === "leyendo" && p.leidas < p.secciones;
+  const hechos = {pendiente: 0, leyendo: 0, a_medias: 0, leido: 1, preguntas: 2, clasificadas: 3}[p.estado];
+  const leyendo = ["leyendo", "a_medias"].includes(p.estado) && p.leidas < p.secciones;
   const detalle = {leyendo: leyendo ? `${p.leidas}/${p.secciones} secciones leídas` : "sintetizando la ficha",
+    a_medias: leyendo ? `${p.leidas}/${p.secciones} secciones` : "falta la ficha",
     leido: p.paso === "grado-pfg" ? "falta el contraste con el grado" : "faltan las preguntas"}[p.estado];
-  return `<div class="etapa"><div class="pista" aria-hidden="${!leyendo}">${["Lectura", "Preguntas", "Clasificación"].map((t, i) =>
+  return `<div class="etapa"><div class="pista${p.estado === "a_medias" ? " parada" : ""}" aria-hidden="${!leyendo}">${["Lectura", "Preguntas", "Clasificación"].map((t, i) =>
     `<span class="${i < hechos ? "hecho" : i === hechos ? "ahora" : ""}" title="${t}">${i === hechos && leyendo
       ? `<i role="progressbar" aria-label="Secciones leídas" aria-valuenow="${p.leidas}" aria-valuemax="${p.secciones}" style="width:${100 * p.leidas / p.secciones}%"></i>` : ""}</span>`).join("")}</div>
     <span class="estado-texto">${ESTADOS[p.estado]}${detalle ? ` <span class="muted">· ${detalle}</span>` : ""}</span></div>`;
@@ -660,7 +670,7 @@ function detalle(p, pestana, cat) {
       <div class="botones"><a class="btn" href="/pfgs/${p.id}/memoria.pdf" target="_blank" rel="noopener" data-leer="${p.id}" title="Con ⌘ o Ctrl, en el visor del navegador">Leer memoria</a>
         <button class="btn peligro" type="button" data-borrar="${p.id}" ${datosBorrado(p)}>Borrar</button></div>
     </div>
-    ${p.estado === "leyendo" ? progreso(p) : ""}
+    ${p.estado === "leyendo" ? progreso(p) : p.estado === "a_medias" ? aMedias(p) : ""}
     ${siguiente(p) && `<div class="next"><b>Siguiente paso</b>${siguiente(p, true)}</div>`}
     ${p.ejecucion ? `<details class="sec"${["fallida", "sin_avance"].includes(p.ejecucion.estado) ? " open" : ""} id="registro"><summary><span class="t">Registro de la última ejecución</span><span class="muted">${EJECUCION[p.ejecucion.estado]}</span></summary>
       <div class="cuerpo"><pre class="log">${h(p.ejecucion.log)}</pre></div></details>` : ""}
