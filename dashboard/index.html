@@ -204,6 +204,25 @@ form.ajustes :is(select, input):hover:not(:disabled) { border-color: var(--muted
 form.ajustes select:disabled { cursor: not-allowed; color: var(--muted); background-color: var(--bg); }
 form.ajustes td { vertical-align: middle; }
 form.ajustes .btn { margin-top: 16px; }
+/* Harnesses: el estado en tinta con un punto, como los bloques bien/flojo de la ficha. Sin instalar, el punto hueco. */
+.falta-harness { display: block; margin-top: 4px; font-size: 12px; color: var(--warn); }
+.falta-harness:empty { display: none; }
+.harnesses-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.harnesses-cab h3 { margin: 0; }
+.harnesses-cab .btn { min-height: 30px; padding: 4px 10px; font-size: 13px; }
+.harnesses { list-style: none; margin: 0; padding: 0; }
+.harnesses > li { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.harnesses > li:first-child { border-top: 0; padding-top: 4px; }
+.harnesses > li:last-child { padding-bottom: 0; }
+.harnesses .cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.harnesses .cab b { font-size: 15px; }
+.estado-h { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.estado-h::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; background: var(--ok); }
+.estado-h.no_instalado::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
+.estado-h.requisito::before { background: var(--warn); }
+.estado-h.no_instalado, .estado-h.requisito { color: var(--ink); font-weight: 500; }
+.harnesses p { margin: 0; font-size: 13px; }
+.harnesses .pendiente { color: var(--warn); overflow-wrap: anywhere; }
 .next { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; margin: 20px 0 0; }
 .next > b { font-weight: 500; }
 .next.desfase { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 30%, var(--warn-soft)); color: var(--warn); }
@@ -836,11 +855,26 @@ let harnesses = {};
 const niveles = (hk, modelo) => harnesses[hk].modelos[modelo] ?? harnesses[hk].esfuerzos;
 const opcionesEsfuerzo = (lista, actual) => (lista.length ? [["", "el del harness"], ...lista.map(n => [n, n])]
   : [["", "este modelo no lo admite"]]).map(([v, t]) => `<option value="${h(v)}"${v === actual ? " selected" : ""}>${h(t)}</option>`).join("");
+const ESTADO_HARNESS = {instalado: "Instalado", no_instalado: "No instalado", requisito: "Instalado, falta un permiso"};
+// Junto al selector de cada fase: se puede guardar igual, pero «Ejecutar» fallará hasta que se instale.
+const faltaHarness = hk => ({no_instalado: "No está instalado: instálalo abajo antes de ejecutar esta fase.",
+  requisito: "Le falta un permiso: míralo abajo."})[harnesses[hk]?.estado] || "";
+const urlCorta = u => u.replace(/^https:\/\//, "").replace(/\/$/, "");
+function vistaHarness([hk, hv]) {
+  const estado = ESTADO_HARNESS[hv.estado] + (hv.estado !== "no_instalado" && hv.version ? ` · ${hv.version}` : "");
+  return `<li data-harness="${hk}"><div class="cab"><b>${h(hv.nombre)}</b><span class="estado-h ${hv.estado}">${h(estado)}</span></div>
+    ${hv.estado === "no_instalado" ? `<p>Para instalarlo, ejecuta en un terminal (macOS y Linux):</p>${comando(hv.instalar.comando)}
+      <p class="muted">Instrucciones oficiales, también para Windows: <a href="${h(hv.instalar.url)}" target="_blank" rel="noopener noreferrer">${h(urlCorta(hv.instalar.url))}</a>.
+        Después, pulsa «Comprobar de nuevo».</p>` : ""}
+    ${hv.estado === "requisito" ? `<p class="pendiente">${h(hv.problema)}</p>` : ""}
+    <p class="muted">${h(hv.nota)}</p></li>`;
+}
 function vistaAjustes(c) {
   harnesses = c.harnesses;
   const fila = ([k, f]) => `<tr><td>${h(f.nombre)}</td>
-    <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
-      `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}</option>`).join("")}</select></td>
+    <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" aria-describedby="falta-${k}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
+      `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}${hv.estado === "no_instalado" ? " (no instalado)" : ""}</option>`).join("")}</select>
+      <span class="falta-harness" id="falta-${k}">${h(faltaHarness(f.harness))}</span></td>
     <td><input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off" data-fase="${k}"></td>
     <td><select name="${k}.esfuerzo" aria-label="Esfuerzo de ${h(f.nombre)}"${niveles(f.harness, f.modelo).length ? "" : " disabled"}>${
       opcionesEsfuerzo(niveles(f.harness, f.modelo), f.esfuerzo)}</select></td></tr>`;
@@ -852,8 +886,9 @@ function vistaAjustes(c) {
       <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
       ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
       <button class="btn primary" type="submit">Guardar</button></form>
-    <div class="bloque" style="margin-top:16px"><h3>Harnesses</h3><ul class="items">${Object.values(c.harnesses).map(hv =>
-      `<li><b>${h(hv.nombre)}</b>. ${h(hv.nota)}${hv.problema ? `<p class="error">${h(hv.problema)}</p>` : ""}</li>`).join("")}</ul></div>`;
+    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>Harnesses en este ordenador</h3>
+      <button class="btn" type="button" data-detectar>Comprobar de nuevo</button></div>
+      <ul class="harnesses">${Object.entries(c.harnesses).map(vistaHarness).join("")}</ul></div>`;
 }
 
 async function cargar() {
@@ -1017,6 +1052,26 @@ async function post(url, cuerpo) {
   } catch { aviso("No se puede conectar con el servidor del dashboard."); }
 }
 document.addEventListener("click", async e => {
+  const detectar = e.target.closest("[data-detectar]");
+  if (detectar) {
+    detectar.disabled = true; detectar.textContent = "Comprobando…";
+    // Lo que el docente haya cambiado sin guardar en la tabla de fases se conserva: solo se repinta la lista.
+    try {
+      const r = await fetch("/api/config/detectar", {method: "POST"});
+      if (!r.ok) throw 0;
+      const txt = await r.text();
+      pintado = location.hash + txt;  // el latido no repinta lo mismo encima
+      harnesses = JSON.parse(txt).harnesses;
+      $("#main .harnesses").innerHTML = Object.entries(harnesses).map(vistaHarness).join("");
+      document.querySelectorAll('#ajustes select[name$=".harness"]').forEach(s => {
+        [...s.options].forEach(o => o.textContent = harnesses[o.value].nombre + (harnesses[o.value].estado === "no_instalado" ? " (no instalado)" : ""));
+        $(`#falta-${s.name.split(".")[0]}`).textContent = faltaHarness(s.value);
+      });
+      aviso("Harnesses comprobados.");
+    } catch { aviso("No se ha podido comprobar los harnesses."); }
+    detectar.disabled = false; detectar.textContent = "Comprobar de nuevo";
+    return;
+  }
   const leer = e.target.closest("[data-leer]");
   if (leer && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) {
     e.preventDefault();
@@ -1090,6 +1145,7 @@ document.addEventListener("input", e => {  // los niveles de esfuerzo dependen d
   modelo.setAttribute("list", `modelos-${harness}`);
   esfuerzo.innerHTML = opcionesEsfuerzo(lista, lista.includes(esfuerzo.value) ? esfuerzo.value : "");
   esfuerzo.disabled = !lista.length;
+  $(`#falta-${k}`).textContent = faltaHarness(harness);
 });
 document.addEventListener("submit", async e => {
   const gid = gradoActual();

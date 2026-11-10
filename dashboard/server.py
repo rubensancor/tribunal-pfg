@@ -93,27 +93,36 @@ OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDO
 # Cómo lanza cada harness una fase sin interacción. Cada uno controla los permisos a su manera.
 # «modelos» son las sugerencias con los niveles de esfuerzo que acepta cada una; «esfuerzos», los del modelo por
 # defecto y los que no están en la lista. agy rechaza --effort con los modelos que fijan el nivel en el nombre.
+# «instalar» es el comando oficial para macOS y Linux, copiado de la página de «url»: el dashboard solo lo muestra.
 HARNESSES = {
-    "claude": {"nombre": "Claude Code", "bin": "claude", "modelos": dict.fromkeys(["opus", "sonnet", "haiku"], ESFUERZOS_CLAUDE),
+    "claude": {"nombre": "Claude Code", "bin": "claude",
+               "instalar": {"comando": "curl -fsSL https://claude.ai/install.sh | bash", "url": "https://code.claude.com/docs/en/setup"},
+               "modelos": dict.fromkeys(["opus", "sonnet", "haiku"], ESFUERZOS_CLAUDE),
                "esfuerzos": ESFUERZOS_CLAUDE,
                "nota": "Solo puede ejecutar scripts/pfg.py y python3 -m json.tool; deniega el resto sin preguntar.",
                "args": lambda prompt, modelo, esfuerzo: [
                    "-p", prompt, "--permission-mode", "dontAsk", *opcion("--model", modelo),
                    *opcion("--effort", esfuerzo), "--allowedTools",
                    " ".join(["Read", "Write", "Edit", "Glob", "Grep", "Agent", *(f"Bash({c}:*)" for c in COMANDOS_SKILLS)])]},
-    "agy": {"nombre": "Antigravity (agy)", "bin": "agy", "modelos": {"gemini-3.8-flash": ESFUERZOS_GEMINI, "gemini-3.8-flash-high": [],
+    "agy": {"nombre": "Antigravity (agy)", "bin": "agy",
+            "instalar": {"comando": "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+                         "url": "https://antigravity.google/docs/getting-started?tab=cli"},
+            "modelos": {"gemini-3.8-flash": ESFUERZOS_GEMINI, "gemini-3.8-flash-high": [],
                                                        "claude-opus-4-6-thinking": []},
             "esfuerzos": ESFUERZOS_GEMINI,
             "nota": "Aplica las ediciones sin preguntar y los comandos según los permisos de tu settings.json de agy.",
             "requisito": faltan_permisos_agy,
             "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", *opcion("--model", modelo),
                                                      *opcion("--effort", esfuerzo)]},
-    "pi": {"nombre": "Pi", "bin": "pi", "modelos": {"openai-codex/gpt-6-luna": ESFUERZOS_PI},
+    "pi": {"nombre": "Pi", "bin": "pi", "instalar": {"comando": "curl -fsSL https://pi.dev/install.sh | sh", "url": "https://pi.dev"},
+           "modelos": {"openai-codex/gpt-6-luna": ESFUERZOS_PI},
            "esfuerzos": ESFUERZOS_PI,
            "nota": "Pi no tiene permisos: puede ejecutar cualquier comando sin preguntar.",
            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--no-session", "--approve", *opcion("--model", modelo),
                                                      *opcion("--thinking", esfuerzo)]},
-    "codex": {"nombre": "Codex", "bin": "codex", "modelos": {"gpt-6-luna": ESFUERZOS_CODEX, "gpt-5.6-luna": ESFUERZOS_CODEX,
+    "codex": {"nombre": "Codex", "bin": "codex",
+              "instalar": {"comando": "curl -fsSL https://chatgpt.com/codex/install.sh | sh", "url": "https://learn.chatgpt.com/docs/codex/cli"},
+              "modelos": {"gpt-6-luna": ESFUERZOS_CODEX, "gpt-5.6-luna": ESFUERZOS_CODEX,
                                                          "gpt-5.6-terra": [*ESFUERZOS_CODEX, "ultra"]},
               "esfuerzos": ESFUERZOS_CODEX,
               "nota": "Ejecuta cualquier comando sin preguntar, pero en su sandbox: sin red, sin leer tus notas personales "
@@ -129,7 +138,9 @@ HARNESSES = {
                   "exec", "--ephemeral", "--skip-git-repo-check", *perfil_codex(), *opcion("--model", modelo),
                   *opcion("-c", esfuerzo and f'model_reasoning_effort="{esfuerzo}"'), prompt]},
     # --standalone: el servicio de fondo de opencode no vería la configuración de esta carpeta ni la de env.
-    "opencode": {"nombre": "OpenCode (modelos gratis)", "bin": "opencode", "modelos": OPENCODE_GRATIS,
+    "opencode": {"nombre": "OpenCode (modelos gratis)", "bin": "opencode",
+                 "instalar": {"comando": "curl -fsSL https://opencode.ai/v2/install | bash", "url": "https://opencode.ai/docs"},
+                 "modelos": OPENCODE_GRATIS,
                  "esfuerzos": OPENCODE_GRATIS[OPENCODE_DEFECTO], "solo_modelos": True,
                  "nota": "Solo modelos gratuitos de OpenCode Zen que no entrenan con los datos. Solo puede ejecutar "
                          "scripts/pfg.py y python3 -m json.tool, sin web ni tus notas personales; deniega el resto sin preguntar.",
@@ -324,16 +335,51 @@ def config_ejecucion():
         return validar_config({})
 
 
-def vista_config():
+VERSIONES = {}  # ruta del binario -> primera línea de su --version; «Comprobar de nuevo» la vacía
+
+
+def version(ruta):
+    if ruta not in VERSIONES:
+        try:
+            r = subprocess.run([ruta, "--version"], capture_output=True, text=True, timeout=3, stdin=subprocess.DEVNULL)
+            linea = next((x.strip() for x in (r.stdout + "\n" + r.stderr).splitlines() if x.strip()), "") if r.returncode == 0 else ""
+        except (OSError, subprocess.TimeoutExpired):
+            linea = ""
+        VERSIONES[ruta] = linea[:80] or None
+    return VERSIONES[ruta]
+
+
+def detectar(forzar=False):
+    """{harness: {estado, version, problema}}. which va en cada llamada (barato, así se ve lo recién instalado);
+    --version, una vez por ruta y en paralelo, para no frenar cada carga de Ajustes."""
+    if forzar:
+        VERSIONES.clear()
+    rutas = {k: shutil.which(h["bin"]) for k, h in HARNESSES.items()}
+    hilos = [threading.Thread(target=version, args=(r,)) for r in set(rutas.values()) if r and r not in VERSIONES]
+    for t in hilos:
+        t.start()
+    for t in hilos:
+        t.join()
+    r = {}
+    for k, h in HARNESSES.items():
+        if not rutas[k]:
+            r[k] = {"estado": "no_instalado", "version": None, "problema": f"No se encuentra «{h['bin']}» en el PATH."}
+        else:
+            requisito = (h.get("requisito") or (lambda: None))()
+            r[k] = {"estado": "requisito" if requisito else "instalado", "version": VERSIONES.get(rutas[k]), "problema": requisito}
+    return r
+
+
+def vista_config(forzar=False):
     try:
         validar_config(leer(CONFIG_EJECUCION) or {})
         error = None
     except ValueError as e:
         error = f"{CONFIG_EJECUCION.name} no es válido y se usan los valores por defecto: {e}"
+    estados = detectar(forzar)
     return {"fases": {f: {"nombre": FASES[f], **c} for f, c in config_ejecucion().items()}, "error": error,
             "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "esfuerzos": h["esfuerzos"], "nota": h["nota"],
-                              "problema": (None if shutil.which(h["bin"]) else f"No se encuentra «{h['bin']}» en el PATH.")
-                              or (h.get("requisito") or (lambda: None))()}
+                              "instalar": h["instalar"], **estados[k]}
                           for k, h in HARNESSES.items()}}
 
 
@@ -741,6 +787,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         url = urlparse(self.path)
         try:
+            if url.path == "/api/config/detectar":
+                return self.responder(200, vista_config(forzar=True))
             if url.path == "/api/config":
                 cfg = validar_config(self.cuerpo_json())
                 CONFIG_EJECUCION.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -826,6 +874,7 @@ def main():
     webbrowser.open(url)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     threading.Thread(target=preparar_cola, daemon=True).start()
+    threading.Thread(target=detectar, daemon=True).start()  # las versiones, en caché antes de abrir Ajustes
     threading.Thread(target=descargar_cola, daemon=True).start()
     try:
         servidor.serve_forever()
