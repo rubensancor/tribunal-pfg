@@ -260,7 +260,7 @@ print("hecho: " + prompt)
     (d / "paginas" / "indice.json").write_text(json.dumps([{"w": 595, "h": 842, "pag": None}] * 2 + [{"w": 595, "h": 842, "pag": "1"}]))
     (d / "paginas" / "p003.json").write_text(json.dumps({"palabras": [[.1, .1, .2, .12, w] for w in
                                                                       "La latencia baja un 30 %".split()]}))
-    archivo = lambda nombre: json.loads((d / nombre).read_text()) if (d / nombre).exists() else {}  # noqa: E731
+    archivo = lambda nombre: json.loads((d / nombre).read_text(encoding="utf-8")) if (d / nombre).exists() else {}  # noqa: E731
     notas = lambda: {n["id"]: n for n in server.anotaciones(d)}  # noqa: E731
 
     server.guardar_anotacion(d, "aaaa1111", {"tipo": "agente", "pdf": 3, "palabras": [1, 2], "nota": "", "cita": "inventada"})
@@ -399,13 +399,13 @@ print("codex-cli 9.1.0")
                 assert "irm https://" in cmd and cmd.endswith(("| iex", '| iex"')), k
     server.SISTEMA = sistema
     assert c["harnesses"]["codex"]["version"] == "codex-cli 9.1.0" and c["harnesses"]["pi"]["estado"] == "no_instalado"
-    assert llamadas.read_text().count("x") == 1, "la versión sale de la caché"
+    assert llamadas.read_text(encoding="utf-8").count("x") == 1, "la versión sale de la caché"
     agente_falso(bins / "pi", 'print("0.9")\n')
     assert server.detectar()["pi"] == {"estado": "instalado", "version": "0.9", "problema": None}, "lo recién instalado se ve sin reiniciar"
     assert pedir("/api/config/detectar", {}, "https://evil.example")[0] == 403
     codigo, cuerpo = pedir("/api/config/detectar", {})
     assert codigo == 200 and json.loads(cuerpo)["harnesses"]["codex"]["estado"] == "instalado"
-    assert llamadas.read_text().count("x") == 2, "«Comprobar de nuevo» vuelve a pedir la versión"
+    assert llamadas.read_text(encoding="utf-8").count("x") == 2, "«Comprobar de nuevo» vuelve a pedir la versión"
     server.os.environ["PATH"] = path
     server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"] = claude_bin, requisito
 
@@ -454,7 +454,7 @@ print("codex-cli 9.1.0")
     codigo, cuerpo = pedir("/api/grados", {"nombre": "  Grado en Ingeniería Informática "})
     assert codigo == 201 and json.loads(cuerpo) == {"id": "grado-en-ingenieria-informatica"}
     g = server.GRADOS / "grado-en-ingenieria-informatica"
-    assert json.loads((g / "grado.json").read_text()) == {"nombre": "Grado en Ingeniería Informática", "fuentes": {}}
+    assert json.loads((g / "grado.json").read_text(encoding="utf-8")) == {"nombre": "Grado en Ingeniería Informática", "fuentes": {}}
     assert pedir("/api/grados", {"nombre": "Grado en Ingeniería Informática"})[0] == 409, "ya existe"
     assert pedir("/api/grados", {"nombre": " "})[0] == 409
     assert server.resumen(d)["paso"] == "preguntas-pfg", "un grado sin programas no cambia el flujo"
@@ -511,7 +511,7 @@ print("codex-cli 9.1.0")
     assert simultaneas["max"] == 1, "de una en una"
     assert sorted(p.name for p in (g / "programas").iterdir()) == ["145320.html", "guia.pdf", "redes-ii.pdf", "sistemas-operativos.txt"]
     assert (g / "programas" / "145320.html").read_bytes().startswith(b"<p>Contenidos") and (g / "programas" / "guia.pdf").exists()
-    assert json.loads((g / "grado.json").read_text())["fuentes"] == {"145320": r[0]["url"], "guia": f"{web}/guia.pdf"}
+    assert json.loads((g / "grado.json").read_text(encoding="utf-8"))["fuentes"] == {"145320": r[0]["url"], "guia": f"{web}/guia.pdf"}
 
     (g / "asignaturas").mkdir()
     ficha = {"asignatura": "Arquitectura", "codigo": "145320", "curso": 3, "caracter": "optativa",
@@ -537,7 +537,7 @@ print("codex-cli 9.1.0")
     assert not (g / "asignaturas" / "145320.json").exists(), "un programa sustituido pierde su ficha"
     (g / "asignaturas" / "145320.json").write_text(json.dumps(ficha))
     assert pedir(f"/api/grados/{g.name}/programas/guia/borrar", {})[0] == 200
-    assert not (g / "programas" / "guia.pdf").exists() and "guia" not in json.loads((g / "grado.json").read_text())["fuentes"]
+    assert not (g / "programas" / "guia.pdf").exists() and "guia" not in json.loads((g / "grado.json").read_text(encoding="utf-8"))["fuentes"]
 
     # El contraste. El agente falso escribe lo que escribiría grado-pfg.
     agente_falso(agente, '''
@@ -657,9 +657,9 @@ with tempfile.TemporaryDirectory() as tmp:
         base = f"http://127.0.0.1:{srv.server_port}"
         assert pedir("/api/actualizar", {}, "https://evil.example")[0] == 403 and not reinicios
         assert pedir("/api/actualizar", {}) == (202, b'{"ok": true}') and reinicios == [1]
-        assert (copia / "VERSION").read_text() == "0.2.0\n", "llega a la release, no al último commit"
-        assert (copia / "pfgs" / "dato").read_text() == "del docente"
-        assert (copia / "categorias.json").read_text() == '{"mias": 1}'
+        assert (copia / "VERSION").read_text(encoding="utf-8") == "0.2.0\n", "llega a la release, no al último commit"
+        assert (copia / "pfgs" / "dato").read_text(encoding="utf-8") == "del docente"
+        assert (copia / "categorias.json").read_text(encoding="utf-8") == '{"mias": 1}'
         assert server.CERROJO.locked(), "nada empieza hasta el reinicio"
         server.CERROJO.release()
 
@@ -673,7 +673,7 @@ with tempfile.TemporaryDirectory() as tmp:
         server.APP = False
         srv.shutdown()
     finally:
-        server.RAIZ, server.VERSION = raiz, (raiz / "VERSION").read_text().strip()
+        server.RAIZ, server.VERSION = raiz, (raiz / "VERSION").read_text(encoding="utf-8").strip()
 
 # Lanzado por la app de escritorio: no abre el navegador y para cuando la app cierra su stdin.
 with socket.socket() as s:
