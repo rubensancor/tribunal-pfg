@@ -12,9 +12,9 @@ Funciona con Claude Code, Codex, Pi, Antigravity y OpenCode: las skills están e
 
 Las memorias contienen datos personales y trabajo sin publicar. Se quedan en tu ordenador, en `pfgs/`, pero su contenido llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
 
-## Instalación con la app
+## Instalación
 
-Es la forma más sencilla. Descarga el instalador de tu sistema desde la [última versión](https://github.com/rubensancor/tribunal-pfg/releases/latest):
+Descarga el instalador de tu sistema desde la [última versión](https://github.com/rubensancor/tribunal-pfg/releases/latest):
 
 | Sistema | Archivo |
 |---|---|
@@ -23,7 +23,7 @@ Es la forma más sencilla. Descarga el instalador de tu sistema desde la [últim
 | Windows | `Tribunal-PFG-X.Y.Z-win-x64.exe` |
 | Linux | `Tribunal-PFG-X.Y.Z-linux-x86_64.AppImage` |
 
-La app trae todo lo que necesita el dashboard: no hace falta terminal, ni uv, ni git. Solo te falta un agente: sigue el paso [4. Instala un agente](#4-instala-un-agente).
+La app trae todo lo que necesita el dashboard: no hace falta terminal, ni uv, ni git. Solo te falta un agente: sigue [Instala un agente](#instala-un-agente).
 
 La app todavía no está firmada, así que la primera vez el sistema te avisa:
 
@@ -33,73 +33,7 @@ La app todavía no está firmada, así que la primera vez el sistema te avisa:
 
 La primera vez tarda un minuto, mientras descarga Python y pymupdf. Tus memorias, grados y ajustes se guardan en **Documentos/Tribunal PFG**. Es la carpeta del proyecto: abre ahí tu agente si quieres lanzar las skills a mano.
 
-## Instalación con agente
-
-Si ya tienes un agente (Claude Code, Codex u otro), deja que lo instale él. Abre el agente en la carpeta donde quieras guardar la herramienta y pega este texto.
-
-```text
-Instala Tribunal PFG en esta carpeta, paso a paso. Antes de instalar cualquier
-cosa en el sistema, dime qué vas a instalar y con qué comando, y espera a que lo confirme.
-
-1. Comprueba si uv está instalado (uv --version). Si falta, propón el instalador
-   oficial de https://docs.astral.sh/uv/getting-started/installation/ para mi sistema.
-2. Comprueba si git está instalado (git --version). Si falta, dime cómo instalarlo
-   desde https://git-scm.com/downloads, o descarga el ZIP del repositorio.
-3. Clona el repositorio: git clone https://github.com/rubensancor/tribunal-pfg.git tribunal-pfg
-4. Entra en tribunal-pfg y arranca el dashboard en segundo plano: uv run dashboard/server.py
-5. Abre http://127.0.0.1:8765 en el navegador.
-6. Abre la pantalla Ajustes del dashboard y dime qué harnesses aparecen como
-   instalados y cuáles faltan. No instales ninguno sin preguntarme.
-```
-
-Al terminar tendrás el dashboard abierto. Sigue en [Uso diario](#uso-diario).
-
-## Instalación manual
-
-Necesitas un terminal: en macOS, la app **Terminal**; en Windows, **PowerShell**. Copia cada comando, pégalo y pulsa Intro.
-
-### 1. Instala uv
-
-[uv](https://docs.astral.sh/uv/) se encarga de Python y de la única dependencia, pymupdf. Comprueba si ya lo tienes con `uv --version`. Si no, instálalo con el [instalador oficial](https://docs.astral.sh/uv/getting-started/installation/):
-
-- macOS y Linux:
-
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-
-- Windows (PowerShell):
-
-  ```powershell
-  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
-
-Después, cierra el terminal y abre otro, para que encuentre `uv`.
-
-### 2. Descarga Tribunal PFG
-
-Con [git](https://git-scm.com/downloads):
-
-```bash
-git clone https://github.com/rubensancor/tribunal-pfg.git tribunal-pfg
-cd tribunal-pfg
-```
-
-Sin git, descarga el ZIP desde la página del repositorio en GitHub (**Code → Download ZIP**), descomprímelo y entra en esa carpeta con `cd`. En Windows, lee antes [Windows](#windows).
-
-### 3. Arranca el dashboard
-
-Dentro de la carpeta `tribunal-pfg`:
-
-```bash
-uv run dashboard/server.py
-```
-
-La primera vez tarda un poco: uv descarga Python y pymupdf. Abre http://127.0.0.1:8765 en el navegador. Deja el terminal abierto mientras lo uses; para pararlo, pulsa Ctrl+C. Si quieres otro puerto, añádelo al final: `uv run dashboard/server.py 8770`.
-
-Cada día, para volver a usarlo, abre un terminal, entra en la carpeta con `cd` y repite este paso.
-
-### 4. Instala un agente
+### Instala un agente
 
 Las skills necesitan un agente, que aquí llamamos harness. Basta con uno. En **Ajustes** el dashboard muestra qué harnesses tienes, con su versión, y para los que faltan el comando de instalación de tu sistema y su página oficial. Después de instalar uno, pulsa **Comprobar de nuevo**.
 
