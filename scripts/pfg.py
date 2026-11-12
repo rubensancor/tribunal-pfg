@@ -98,14 +98,19 @@ def marca(page):
     return f"[[pdf:{page.number + 1} pág:{etiqueta}]]" if etiqueta else f"[[pdf:{page.number + 1}]]"
 
 
-def trocear(pfg_id):
+def memoria(d):
+    """El PDF leído entero: así no queda abierto el archivo, que Windows no dejaría borrar."""
     import pymupdf
+    return pymupdf.open(stream=(d / "memoria.pdf").read_bytes(), filetype="pdf")
+
+
+def trocear(pfg_id):
     d = dir_pfg(pfg_id)
     sd = d / "secciones"
     if (sd / "indice.json").exists():
         sys.exit(f"{pfg_id} ya está troceado; borra {sd} para rehacerlo")
     sd.mkdir(exist_ok=True)
-    doc = pymupdf.open(d / "memoria.pdf")
+    doc = memoria(d)
     indice = []
     for n, (titulo, ini, fin) in enumerate(secciones(doc.get_toc(), doc.page_count)):
         partes, sin_texto = [], []
@@ -402,9 +407,8 @@ def escribir(ruta, datos):
 
 
 def paginas(pfg_id):
-    import pymupdf
     d = dir_pfg(pfg_id)
-    doc = pymupdf.open(d / "memoria.pdf")
+    doc = memoria(d)
     indice = [{"w": round(p.rect.width, 2), "h": round(p.rect.height, 2), "pag": p.get_label() or None} for p in doc]
     escribir(d / "paginas" / "indice.json", json.dumps(indice, ensure_ascii=False).encode())
     print(d / "paginas" / "indice.json")
@@ -413,7 +417,7 @@ def paginas(pfg_id):
 def imagen(pfg_id, pdf):
     import pymupdf
     d = dir_pfg(pfg_id)
-    doc = pymupdf.open(d / "memoria.pdf")
+    doc = memoria(d)
     if not 1 <= pdf <= doc.page_count:
         sys.exit(f"la página {pdf} no existe (el PDF tiene {doc.page_count})")
     page = doc[pdf - 1]
