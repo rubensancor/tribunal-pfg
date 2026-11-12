@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Self-check del dashboard: fases con un agente falso y notas del lector. Uso: uv run tests/test_dashboard.py"""
+import functools
 import json
 import os
 import socket
 import sys
-from http.server import BaseHTTPRequestHandler
+import tarfile
+from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler
 import tempfile
 import threading
 import time
@@ -683,10 +685,44 @@ with tempfile.TemporaryDirectory() as tmp:
         assert server.estado_version()["modo"] == "zip" and "no se instaló con git" in falla(server.actualizar)
         server.APP = True  # la app empaquetada: su carpeta de trabajo no es un clon de git
         assert server.estado_version()["modo"] == "app"
-        server.APP = False
+
+        # En la app, el botón baja de GitHub el tarball de la release y lo instala como el instalador de la app.
+        paquete, casa, rel = tmp / "paquete", tmp / "casa", tmp / "rel" / "usuario-tribunal-pfg-abc123"
+        for d, v in ((paquete, "0.1.0"), (rel, "0.2.0")):
+            (d / "config").mkdir(parents=True)
+            (d / "VERSION").write_text(v + "\n")
+            (d / "config" / "categorias.json").write_text("{}" if v == "0.1.0" else '{"v": 2}')
+        (rel / "scripts").mkdir()
+        (rel / "scripts" / "codigo.json").write_text('["VERSION", "config/categorias.json"]')
+        server.instalador.instalar(paquete, casa)
+        tarballs = tmp / "web" / "repos" / server.REPO / "tarball"
+        tarballs.mkdir(parents=True)
+        with tarfile.open(tarballs / "v0.2.0", "w:gz") as tar:
+            tar.add(rel, rel.name)
+
+        class Silencio(SimpleHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+        web = server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Silencio, directory=str(tmp / "web")))
+        threading.Thread(target=web.serve_forever, daemon=True).start()
+        server.GITHUB, server.RAIZ = f"http://127.0.0.1:{web.server_port}", casa
+        (casa / "config" / "categorias.json").write_text('{"mias": 1}')
+        codigo, cuerpo = pedir("/api/actualizar", {})
+        assert codigo == 409 and "config/categorias.json" in json.loads(cuerpo)["error"] and reinicios == [1]
+        assert (casa / "VERSION").read_text() == "0.1.0\n" and not server.CERROJO.locked(), "no instala nada"
+        (casa / "config" / "categorias.json").unlink()
+        assert pedir("/api/actualizar", {}) == (202, b'{"ok": true}') and reinicios == [1, 1]
+        assert (casa / "VERSION").read_text() == "0.2.0\n" and (casa / "config" / "categorias.json").read_text() == '{"v": 2}'
+        assert not (casa / "scripts").exists(), "solo lo que lista codigo.json"
+        assert server.CERROJO.locked(), "nada empieza hasta el reinicio"
+        server.CERROJO.release()
+        server.ULTIMA = {"version": "0.3.0"}  # sin tarball: GitHub responde 404
+        assert "no se ha podido descargar" in falla(server.actualizar) and not server.CERROJO.locked()
+        web.shutdown()
         srv.shutdown()
     finally:
         server.RAIZ, server.VERSION = raiz, (raiz / "VERSION").read_text(encoding="utf-8").strip()
+        server.APP, server.GITHUB = False, "https://api.github.com"
 
 # Lanzado por la app de escritorio: no abre el navegador y para cuando la app cierra su stdin.
 with socket.socket() as s:

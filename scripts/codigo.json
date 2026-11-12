@@ -1,0 +1,16 @@
+[
+ "AGENTS.md",
+ "CLAUDE.md",
+ "VERSION",
+ "LICENSE",
+ ".agents/agents",
+ ".agents/skills/leer-pfg",
+ ".agents/skills/grado-pfg",
+ ".agents/skills/preguntas-pfg",
+ ".agents/skills/anotaciones-pfg",
+ ".codex",
+ ".opencode",
+ "config/categorias.json",
+ "dashboard",
+ "scripts"
+]

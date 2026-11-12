@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import unicodedata
@@ -22,6 +23,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "scripts"))
 import pfg  # noqa: E402  sin pymupdf: solo lo importan sus funciones de PDF
+import instalar as instalador  # noqa: E402
 
 PFGS = RAIZ / "pfgs"
 GRADOS = RAIZ / "grados"
@@ -50,6 +52,7 @@ PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder pregun
           "de archivos, no la shell.")
 VERSION = (RAIZ / "VERSION").read_text().strip()
 REPO = "rubensancor/tribunal-pfg"
+GITHUB = "https://api.github.com"  # los tests lo apuntan a un servidor local
 APP = os.environ.get("TRIBUNAL_APP") == "1"  # lo lanza la app de escritorio (main.js), que pone la ventana
 REINICIO_APP = 75  # tras actualizar, la app vuelve a arrancar el servidor si sale con este código
 AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
@@ -421,7 +424,7 @@ def comprobar_version():
     """Pide a GitHub la última release. No envía nada del docente ni de las memorias."""
     global ULTIMA
     try:
-        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
+        req = urllib.request.Request(f"{GITHUB}/repos/{REPO}/releases/latest",
                                      headers={"User-Agent": "tribunal-pfg", "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=5) as r:
             rel = json.load(r)
@@ -450,11 +453,11 @@ def git(*args):
 
 
 def actualizar():
-    """Avanza la copia hasta la última release, solo si es un avance directo. Si sale bien, vuelve con CERROJO
-    cogido: nada puede empezar hasta el reinicio."""
+    """Avanza la copia hasta la última release: con git, solo si es un avance directo; en la app, con el código del
+    tarball de la release. Si sale bien, vuelve con CERROJO cogido: nada puede empezar hasta el reinicio."""
     v = estado_version()
-    if v["modo"] != "git":
-        raise ValueError("esta copia no se instaló con git: descarga la versión nueva desde su página")
+    if v["modo"] == "zip":
+        raise ValueError("esta copia no se instaló con git ni con la app: descarga la versión nueva desde su página")
     if not v["nueva"]:
         raise ValueError("ya tienes la última versión")
     CERROJO.acquire()
@@ -464,6 +467,8 @@ def actualizar():
         if COLA or any(x["estado"] in ("en_cola", "descargando") for xs in DESCARGAS.values() for x in xs):
             raise ValueError("espera a que se vacíe la cola y terminen las descargas: al reiniciar se perderían")
         tag = "v" + v["ultima"]
+        if v["modo"] == "app":
+            return actualizar_app(tag)
         git("fetch", "--no-tags", "origin", "tag", tag)
         # Solo bloquea lo que el docente cambió y la versión nueva también (categorias.json, por ejemplo); el resto se
         # conserva. Lo ignorado (pfgs/, grados/, config/ejecucion.json) ni aparece: nunca bloquea ni se toca.
@@ -475,6 +480,23 @@ def actualizar():
     except BaseException:
         CERROJO.release()
         raise
+
+
+def actualizar_app(tag):
+    """Descarga el tarball de la release y lo instala en la carpeta de trabajo como lo haría su instalador. Lo que
+    cambie la propia app (app/main.js, uv, Electron) sigue necesitando el instalador nuevo."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tarball = Path(tmp) / "release.tar.gz"
+        try:
+            req = urllib.request.Request(f"{GITHUB}/repos/{REPO}/tarball/{tag}", headers={"User-Agent": "tribunal-pfg"})
+            with urllib.request.urlopen(req, timeout=60) as r, tarball.open("wb") as f:
+                shutil.copyfileobj(r, f)
+        except OSError:
+            raise ValueError("no se ha podido descargar la versión nueva: comprueba la conexión y vuelve a intentarlo")
+        try:
+            instalador.desde_release(tarball, RAIZ)
+        except (OSError, instalador.tarfile.TarError) as e:
+            raise ValueError(f"no se ha podido instalar la versión nueva: {e}")
 
 
 def reiniciar():
