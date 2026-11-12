@@ -360,8 +360,17 @@ VERSIONES = {}  # ruta del binario -> primera línea de su --version; «Comproba
 def version(ruta):
     if ruta not in VERSIONES:
         try:
-            r = subprocess.run([ruta, "--version"], capture_output=True, text=True, timeout=3, stdin=subprocess.DEVNULL)
-            linea = next((x.strip() for x in (r.stdout + "\n" + r.stderr).splitlines() if x.strip()), "") if r.returncode == 0 else ""
+            # No subprocess.run(timeout=): solo mata al hijo, y el nieto (lo que lanza un .cmd de npm en Windows)
+            # seguiría con las tuberías abiertas y communicate() lo esperaría. Se baja el árbol entero.
+            p = subprocess.Popen([ruta, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                 stdin=subprocess.DEVNULL, start_new_session=True)
+            try:
+                out, err = p.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                matar_arbol(p)
+                p.communicate(timeout=3)
+                raise
+            linea = next((x.strip() for x in (out + "\n" + err).splitlines() if x.strip()), "") if p.returncode == 0 else ""
         except (OSError, subprocess.TimeoutExpired):
             linea = ""
         VERSIONES[ruta] = linea[:80] or None
@@ -511,7 +520,7 @@ def ejecucion(pfg_id, paso, con_log=False):
     despues = None
     if e["seguir"] and e["fase"] != "preguntas-pfg":
         despues = FASES["grado-pfg" if e["fase"] == "leer-pfg" and hay_programas() else "preguntas-pfg"]
-    estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
+    estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 or e.get("detenida") else "fallida" if codigo
               else "terminada" if avanzo else "sin_avance")
     r = {"paso": e["fase"], "fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
          "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo,
@@ -524,8 +533,10 @@ def ejecucion(pfg_id, paso, con_log=False):
 
 
 def binario(harness):
-    if not shutil.which(b := HARNESSES[harness]["bin"]):
+    """La ruta del harness. Se lanza por ruta: en Windows, Popen("codex") solo encuentra un .exe, no el .cmd de npm."""
+    if not (ruta := shutil.which(b := HARNESSES[harness]["bin"])):
         raise ValueError(f"no se encuentra «{b}» en el PATH")
+    return ruta
 
 
 def lanzar(d, fase=None, seguir=False):
@@ -549,8 +560,9 @@ def lanzar(d, fase=None, seguir=False):
         elif not any(n["pendiente"] for n in anotaciones(d)):
             raise ValueError("no hay notas pendientes de respuesta")
         cfg = config_ejecucion()[fase]
-        binario(cfg["harness"])
+        ruta = binario(cfg["harness"])
         argv = comando_agente(cfg["harness"], cfg["modelo"], cfg["esfuerzo"], f"usa la skill {fase} con el PFG {d.name}")
+        argv[0] = ruta
         log = d / "ejecuciones" / f"{time.strftime('%Y%m%d-%H%M%S')}-{fase}.log"
         log.parent.mkdir(exist_ok=True)
         with open(log, "w", encoding="utf-8") as f:
@@ -610,15 +622,21 @@ def borrar(d):
         shutil.rmtree(d)
 
 
+def matar_arbol(proc):
+    """El proceso y lo que haya lanzado. En POSIX, proc tiene que ir en su propio grupo (start_new_session)."""
+    if os.name == "nt":  # sin grupos de procesos: taskkill /T baja el árbol
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass  # terminó entre poll() y killpg()
+
+
 def detener(e):
     if e["proc"].poll() is None:
-        if os.name == "nt":  # sin grupos de procesos: taskkill /T baja el árbol del agente
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(e["proc"].pid)], capture_output=True)
-            return
-        try:
-            os.killpg(e["proc"].pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass  # terminó entre poll() y killpg()
+        e["detenida"] = True  # taskkill deja el código 1, no uno negativo: sin esto se vería como fallida
+        matar_arbol(e["proc"])
 
 
 def origen_local(host, origen, puerto):

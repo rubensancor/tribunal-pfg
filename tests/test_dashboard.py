@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Self-check del dashboard: fases con un agente falso y notas del lector. Uso: uv run tests/test_dashboard.py"""
 import json
+import os
 import socket
 import sys
 from http.server import BaseHTTPRequestHandler
@@ -22,6 +23,30 @@ def falla(f, *args):
     except ValueError as e:
         return str(e)
     raise AssertionError(f"{f.__name__}{args} debía fallar")
+
+
+# Lo que todo agente falso tiene a mano: el prompt (claude -p <prompt>) y la carpeta del PFG que nombra.
+PRELUDIO = '''import os, re, sys, time
+from pathlib import Path
+sys.stdout.reconfigure(encoding="utf-8")
+prompt = sys.argv[2] if len(sys.argv) > 2 else ""
+def carpeta():
+    return Path(os.environ["PFGS"]) / re.search(r"con el PFG ([a-z0-9-]*)", prompt).group(1)
+'''
+
+
+def agente_falso(ruta, codigo):
+    """Un agente falso escrito en Python. Lo lanza un #!/bin/sh con exec (mismo PID, para killpg) o, en Windows, un
+    .cmd como los que instala npm: Popen no ejecuta un script sin extensión. Devuelve la ruta que hay que lanzar."""
+    py = ruta.with_name(ruta.name + "-falso.py")  # otro nombre: shutil.which("codex") no debe dar con codex.py
+    py.write_text(PRELUDIO + codigo, encoding="utf-8")
+    if os.name == "nt":
+        ruta = ruta.with_name(ruta.name + ".cmd")
+        ruta.write_text(f'@"{sys.executable}" "{py}" %*\n')
+    else:
+        ruta.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{py}" "$@"\n')
+        ruta.chmod(0o755)
+    return str(ruta)
 
 
 assert server.validar_config({}) == {f: {"harness": "claude", "modelo": "", "esfuerzo": ""} for f in server.FASES}
@@ -77,9 +102,13 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
     server.PFGS, server.CONFIG_EJECUCION, server.GRADOS = tmp / "pfgs", tmp / "ejecucion.json", tmp / "grados"
     agente = tmp / "agente"
-    agente.write_text('#!/bin/sh\ncase "$2" in *salir-mal*) exit 3;; *dormir*) sleep 30;; esac\necho "hecho: $2"\n')
-    agente.chmod(0o755)
-    server.HARNESSES["claude"]["bin"] = str(agente)
+    server.HARNESSES["claude"]["bin"] = agente_falso(agente, '''
+if "salir-mal" in prompt:
+    sys.exit(3)
+if "dormir" in prompt:
+    time.sleep(30)
+print("hecho: " + prompt)
+''')
     d = server.PFGS / "demo"
     d.mkdir(parents=True)
     (d / "memoria.pdf").write_bytes(b"%PDF")
@@ -97,8 +126,15 @@ with tempfile.TemporaryDirectory() as tmp:
     assert e["fase"] == "Lectura de la memoria" and e["paso"] == "leer-pfg" and "hecho: usa la skill leer-pfg con el PFG demo." in e["log"], e["log"]
     assert server.resumen(d)["ejecutor"] == "Claude Code"
     server.PROMPT = "{comando} avanzar"
-    agente.write_text('#!/bin/sh\ncase "$2" in *salir-mal*) exit 3;; *dormir*) sleep 30;; '
-                      '*avanzar*) echo "{\\"titulo\\": \\"T\\"}" > "$PFG/analisis.json";; esac\necho "hecho: $2"\n')
+    agente_falso(agente, '''
+if "salir-mal" in prompt:
+    sys.exit(3)
+if "dormir" in prompt:
+    time.sleep(30)
+elif "avanzar" in prompt:
+    Path(os.environ["PFG"], "analisis.json").write_text('{"titulo": "T"}')
+print("hecho: " + prompt)
+''')
     server.os.environ["PFG"] = str(d)
     server.lanzar(d)
     esperar("terminada")
@@ -129,12 +165,22 @@ with tempfile.TemporaryDirectory() as tmp:
     assert server.resumen(d)["estado"] == "a_medias"
     server.shutil.rmtree(d / "secciones")
 
-    agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
-                      'case "$2" in *dormir*|*"PFG lenta"*) sleep 30;; '
-                      '*"PFG rota"*) echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json"; exit 3;; '
-                      '*leer-pfg*) sleep 0.5; echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json";; '
-                      '*preguntas-pfg*) sleep 0.3; echo "[]" > "$P/preguntas.json"; echo "{}" > "$P/clasificacion.json";; '
-                      'esac\necho "hecho: $2"\n')
+    agente_falso(agente, '''
+P = carpeta()
+if "dormir" in prompt or "PFG lenta" in prompt:
+    time.sleep(30)
+elif "PFG rota" in prompt:
+    (P / "analisis.json").write_text('{"titulo": "T"}')
+    sys.exit(3)
+elif "leer-pfg" in prompt:
+    time.sleep(0.5)
+    (P / "analisis.json").write_text('{"titulo": "T"}')
+elif "preguntas-pfg" in prompt:
+    time.sleep(0.3)
+    (P / "preguntas.json").write_text("[]")
+    (P / "clasificacion.json").write_text("{}")
+print("hecho: " + prompt)
+''')
     server.os.environ["PFGS"] = str(server.PFGS)
     server.PROMPT = "{comando} cola"
     otra, rota, lenta = (server.PFGS / n for n in ["otra", "rota", "lenta"])
@@ -309,11 +355,13 @@ with tempfile.TemporaryDirectory() as tmp:
     bins = tmp / "bin"
     bins.mkdir()
     llamadas = tmp / "llamadas"
-    (bins / "codex").write_text(f'#!/bin/sh\necho x >> "{llamadas}"\necho "codex-cli 9.1.0"\n')
-    (bins / "opencode").write_text("#!/bin/sh\nsleep 10\n")
-    (bins / "agy").write_text("#!/bin/sh\nexit 1\n")
-    for b in bins.iterdir():
-        b.chmod(0o755)
+    agente_falso(bins / "codex", f'''
+with open({str(llamadas)!r}, "a") as f:
+    f.write("x")
+print("codex-cli 9.1.0")
+''')
+    agente_falso(bins / "opencode", "time.sleep(10)\n")
+    agente_falso(bins / "agy", "sys.exit(1)\n")
     path, claude_bin, requisito = server.os.environ["PATH"], server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"]
     server.os.environ["PATH"] = str(bins)
     server.HARNESSES["claude"]["bin"] = "claude"
@@ -352,8 +400,7 @@ with tempfile.TemporaryDirectory() as tmp:
     server.SISTEMA = sistema
     assert c["harnesses"]["codex"]["version"] == "codex-cli 9.1.0" and c["harnesses"]["pi"]["estado"] == "no_instalado"
     assert llamadas.read_text().count("x") == 1, "la versión sale de la caché"
-    (bins / "pi").write_text("#!/bin/sh\necho 0.9\n")
-    (bins / "pi").chmod(0o755)
+    agente_falso(bins / "pi", 'print("0.9")\n')
     assert server.detectar()["pi"] == {"estado": "instalado", "version": "0.9", "problema": None}, "lo recién instalado se ve sin reiniciar"
     assert pedir("/api/config/detectar", {}, "https://evil.example")[0] == 403
     codigo, cuerpo = pedir("/api/config/detectar", {})
@@ -493,8 +540,11 @@ with tempfile.TemporaryDirectory() as tmp:
     assert not (g / "programas" / "guia.pdf").exists() and "guia" not in json.loads((g / "grado.json").read_text())["fuentes"]
 
     # El contraste. El agente falso escribe lo que escribiría grado-pfg.
-    agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
-                      'case "$2" in *nada*) ;; *grado-pfg*) echo "{}" > "$P/contraste.json";; esac\necho "hecho: $2"\n')
+    agente_falso(agente, '''
+if "nada" not in prompt and "grado-pfg" in prompt:
+    (carpeta() / "contraste.json").write_text("{}")
+print("hecho: " + prompt)
+''')
     server.PROMPT = "{comando} nada"
     server.lanzar(d)
     assert server.EJECUCIONES["contrastar"]["fase"] == "grado-pfg" and server.EJECUCIONES["contrastar"]["proc"].wait() == 0
@@ -525,10 +575,16 @@ with tempfile.TemporaryDirectory() as tmp:
     assert det["paso"] == "preguntas-pfg" and det["grado_nombre"] is None and not det["desfase"], "sin grado también cuenta como hecho"
 
     # La cola contrasta entre la lectura y las preguntas.
-    agente.write_text('#!/bin/sh\nP="$PFGS/$(echo "$2" | sed "s/.*con el PFG \\([a-z0-9-]*\\).*/\\1/")"\n'
-                      'case "$2" in *leer-pfg*) echo "{\\"titulo\\": \\"T\\"}" > "$P/analisis.json";; '
-                      '*grado-pfg*) echo "{}" > "$P/contraste.json";; '
-                      '*preguntas-pfg*) echo "[]" > "$P/preguntas.json"; echo "{}" > "$P/clasificacion.json";; esac\n')
+    agente_falso(agente, '''
+P = carpeta()
+if "leer-pfg" in prompt:
+    (P / "analisis.json").write_text('{"titulo": "T"}')
+elif "grado-pfg" in prompt:
+    (P / "contraste.json").write_text("{}")
+elif "preguntas-pfg" in prompt:
+    (P / "preguntas.json").write_text("[]")
+    (P / "clasificacion.json").write_text("{}")
+''')
     for f in ["analisis.json", "contraste.json", "grado.json"]:
         (d / f).unlink()
     server.encolar(d)

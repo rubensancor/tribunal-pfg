@@ -214,7 +214,7 @@ uv run tests/test_dashboard.py
 uv run tests/test_instalar.py
 ```
 
-El workflow **Tests** los pasa en Linux, macOS y Windows en cada PR y en `main`. En Windows se salta `test_dashboard.py`, porque sus agentes falsos son scripts de shell.
+El workflow **Tests** los pasa en Linux, macOS y Windows en cada PR y en `main`.
 
 La app de escritorio necesita Node: `npm install` y `npx electron .` para probarla, y `npm run dist -- --mac --win --linux` para dejar los instaladores en `dist/`.
 

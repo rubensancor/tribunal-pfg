@@ -17,6 +17,4 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3  # no publica tag de versión mayor (v10)
       - run: uv run tests/test_pfg.py
       - run: uv run tests/test_instalar.py
-      # shortcut: sus agentes falsos son scripts #!/bin/sh, que Windows no ejecuta; reescríbelos en Python para cubrirlo.
       - run: uv run tests/test_dashboard.py
-        if: runner.os != 'Windows'
