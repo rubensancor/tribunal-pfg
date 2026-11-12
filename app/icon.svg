@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Fuente del icono de la app. app/icon.png es este SVG a 1024 px; electron-builder saca de él el .icns y el .ico. -->
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef5ff"/>
+      <stop offset="1" stop-color="#c7dcff"/>
+    </linearGradient>
+    <linearGradient id="tablero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="0.55" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="casquete" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e40af"/>
+      <stop offset="1" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="borla" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <filter id="sombra" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0b1f4d" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <!-- Rejilla de macOS: cuerpo de 824 px con margen de 100 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#fondo)"/>
+  <g filter="url(#sombra)">
+    <!-- casquete -->
+    <path d="M300 520 L300 650 C300 715 410 760 512 760 C614 760 724 715 724 650 L724 520 L512 610 Z" fill="url(#casquete)"/>
+    <!-- tablero -->
+    <path d="M512 300 L850 455 L512 610 L174 455 Z" fill="url(#tablero)"/>
+    <path d="M512 300 L850 455 L512 610 L174 455 Z" fill="none" stroke="#93c5fd" stroke-opacity="0.6" stroke-width="6" stroke-linejoin="round"/>
+    <!-- botón y cordón -->
+    <circle cx="512" cy="455" r="20" fill="#bfdbfe"/>
+    <path d="M512 455 L740 545 L740 700" fill="none" stroke="url(#borla)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- borla -->
+    <path d="M740 690 L708 790 Q740 806 772 790 Z" fill="url(#borla)"/>
+  </g>
+</svg>

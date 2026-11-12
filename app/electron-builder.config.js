@@ -8,6 +8,7 @@ const SKILLS = "{leer,grado,preguntas,anotaciones}-pfg"; // las del docente; ver
 module.exports = {
   appId: "io.github.rubensancor.tribunal-pfg",
   productName: "Tribunal PFG",
+  icon: "app/icon.png", // 1024 px; de él salen el .icns de macOS y el .ico de Windows. Fuente: app/icon.svg
   extraMetadata: { version: fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim() },
   artifactName: "Tribunal-PFG-${version}-${os}-${arch}.${ext}", // sin espacios: GitHub los cambiaría por puntos
   files: ["app/main.js", "package.json"],
