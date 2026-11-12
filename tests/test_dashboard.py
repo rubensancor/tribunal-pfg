@@ -225,7 +225,9 @@ print("hecho: " + prompt)
         for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
             (p / f).unlink()
 
-    preparar(rota, otra, hasta=lambda r: r["otra"]["estado"] == "clasificadas")
+    # otra puede llegar a clasificadas antes de que salga el proceso de rota: espera también a su fallo.
+    preparar(rota, otra, hasta=lambda r: r["otra"]["estado"] == "clasificadas"
+             and (r["rota"]["ejecucion"] or {}).get("estado") == "fallida")
     assert server.EJECUCIONES["rota"]["fase"] == "leer-pfg", "una fase fallida no lanza la siguiente"
     assert server.resumen(rota)["ejecucion"]["estado"] == "fallida"
     for f in ["analisis.json", "preguntas.json", "clasificacion.json"]:
