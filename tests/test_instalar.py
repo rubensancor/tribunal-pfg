@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as tmp:
     escribe(app / "scripts" / "__pycache__" / "x.pyc", "basura")
     (app / ".claude").mkdir()
     try:  # como en el repo: .claude/skills -> ../.agents/skills
-        os.symlink("../.agents/skills", app / ".claude" / "skills", target_is_directory=True)
+        os.symlink(os.path.join("..", ".agents", "skills"), app / ".claude" / "skills", target_is_directory=True)
     except OSError:  # Windows sin permisos para enlaces: se prueba el resto
         pass
 
