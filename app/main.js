@@ -95,8 +95,12 @@ async function iniciar() {
   const ruta = pathDeLaShell();
   entorno = app.isPackaged
     // El uv de la app va primero, también para los agentes. Solo el Python de uv: en un Mac sin herramientas de
-    // desarrollo, /usr/bin/python3 es un aviso que pide instalarlas.
-    ? { ...process.env, PATH: path.dirname(UV) + path.delimiter + ruta, UV_PYTHON_PREFERENCE: "only-managed" }
+    // desarrollo, /usr/bin/python3 es un aviso que pide instalarlas. Con los certificados del sistema, uv descarga
+    // también detrás de un proxy corporativo que inspecciona HTTPS (UV_NATIVE_TLS es el nombre antiguo, ya obsoleto).
+    ? {
+      ...process.env, PATH: path.dirname(UV) + path.delimiter + ruta,
+      UV_PYTHON_PREFERENCE: "only-managed", UV_SYSTEM_CERTS: "1",
+    }
     : { ...process.env, PATH: ruta };
   raiz = app.isPackaged ? path.join(app.getPath("documents"), "Tribunal PFG") : CODIGO;
   puerto = await puertoLibre();
