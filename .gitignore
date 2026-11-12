@@ -7,3 +7,6 @@ config/ejecucion.json
 .taste-skill/
 .agents/skills/design-taste-frontend/
 skills-lock.json
+node_modules/
+build/uv/
+dist/

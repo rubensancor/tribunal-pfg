@@ -50,6 +50,8 @@ PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder pregun
           "de archivos, no la shell.")
 VERSION = (RAIZ / "VERSION").read_text().strip()
 REPO = "rubensancor/tribunal-pfg"
+APP = os.environ.get("TRIBUNAL_APP") == "1"  # lo lanza la app de escritorio (main.js), que pone la ventana
+REINICIO_APP = 75  # tras actualizar, la app vuelve a arrancar el servidor si sale con este código
 AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 
@@ -417,7 +419,7 @@ def estado_version():
     u = ULTIMA.get("version")
     return {"actual": VERSION, "ultima": u, "url": ULTIMA.get("url"), "error": ULTIMA.get("error"),
             "nueva": bool(u) and semver(u) > semver(VERSION),
-            "modo": "git" if (RAIZ / ".git").exists() and shutil.which("git") else "zip"}
+            "modo": "git" if (RAIZ / ".git").exists() and shutil.which("git") else "app" if APP else "zip"}
 
 
 def git(*args):
@@ -459,6 +461,8 @@ def actualizar():
 def reiniciar():
     """Sustituye este proceso por el servidor nuevo. Con uv, para que instale las dependencias que añada la versión."""
     print("Actualizado. Reiniciando el dashboard…", flush=True)
+    if APP:  # la app vigila este proceso: si se sustituyera solo, en Windows lo perdería de vista
+        os._exit(REINICIO_APP)
     os.environ["TRIBUNAL_REINICIO"] = "1"
     script = str(Path(__file__).resolve())
     cmd = ([uv, "run", script] if (uv := shutil.which("uv")) else [sys.executable, script]) + sys.argv[1:]
@@ -608,6 +612,9 @@ def borrar(d):
 
 def detener(e):
     if e["proc"].poll() is None:
+        if os.name == "nt":  # sin grupos de procesos: taskkill /T baja el árbol del agente
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(e["proc"].pid)], capture_output=True)
+            return
         try:
             os.killpg(e["proc"].pid, signal.SIGTERM)
         except ProcessLookupError:
@@ -984,7 +991,9 @@ def main():
         sys.exit(f"El puerto {puerto} está ocupado: ¿ya está abierto el dashboard? http://127.0.0.1:{puerto}")
     url = f"http://127.0.0.1:{puerto}"
     print(f"Dashboard del tribunal en {url} (versión {VERSION}; Ctrl+C para parar)", flush=True)
-    if not reinicio:  # tras actualizar, la pestaña abierta se recarga sola
+    if APP:  # la app cierra este stdin al salir, o al morir: es la señal de parada que funciona igual en Windows
+        threading.Thread(target=lambda: (sys.stdin.buffer.read(), servidor.shutdown()), daemon=True).start()
+    elif not reinicio:  # tras actualizar, la pestaña abierta se recarga sola
         webbrowser.open(url)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     threading.Thread(target=preparar_cola, daemon=True).start()

@@ -1,0 +1,22 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false  # un fallo en Windows no debe ocultar si Linux y macOS pasan
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv run tests/test_pfg.py
+      - run: uv run tests/test_instalar.py
+      # shortcut: sus agentes falsos son scripts #!/bin/sh, que Windows no ejecuta; reescríbelos en Python para cubrirlo.
+      - run: uv run tests/test_dashboard.py
+        if: runner.os != 'Windows'

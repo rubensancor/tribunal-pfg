@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Self-check del dashboard: fases con un agente falso y notas del lector. Uso: uv run tests/test_dashboard.py"""
 import json
+import socket
 import sys
 from http.server import BaseHTTPRequestHandler
 import tempfile
@@ -611,8 +612,29 @@ with tempfile.TemporaryDirectory() as tmp:
         assert json.loads(pedir("/api/version")[1])["actual"] == "0.2.0"
         server.RAIZ, server.VERSION = tmp, "0.1.0"
         assert server.estado_version()["modo"] == "zip" and "no se instaló con git" in falla(server.actualizar)
+        server.APP = True  # la app empaquetada: su carpeta de trabajo no es un clon de git
+        assert server.estado_version()["modo"] == "app"
+        server.APP = False
         srv.shutdown()
     finally:
         server.RAIZ, server.VERSION = raiz, (raiz / "VERSION").read_text().strip()
+
+# Lanzado por la app de escritorio: no abre el navegador y para cuando la app cierra su stdin.
+with socket.socket() as s:
+    s.bind(("127.0.0.1", 0))
+    puerto = s.getsockname()[1]
+proc = server.subprocess.Popen([sys.executable, str(Path(server.__file__)), str(puerto)], stdin=server.subprocess.PIPE,
+                               stdout=server.subprocess.DEVNULL, env={**server.os.environ, "TRIBUNAL_APP": "1"})
+for _ in range(100):
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{puerto}/", timeout=1)
+        break
+    except OSError:
+        time.sleep(0.1)
+else:
+    proc.kill()
+    raise AssertionError("el servidor de la app no ha arrancado")
+proc.stdin.close()
+assert proc.wait(timeout=10) == 0, "al cerrar la app, el servidor para limpio"
 
 print("ok")
