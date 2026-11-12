@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory() as tmp:
             mete("config/categorias.json", categorias)
             mete("dashboard/server.py", "v3")
             mete(".agents/skills/leer-pfg/SKILL.md", "v3")
-            mete(".agents/skills/verify-tribunal/SKILL.md", "de desarrollo")
+            mete(".agents/skills/de-desarrollo/SKILL.md", "de desarrollo")
             mete("tests/test_pfg.py", "de desarrollo")
             mete("dashboard/../../fuera.txt", "se sale")
             mete("dashboard/..\\..\\fuera.txt", "se sale en Windows")
@@ -110,7 +110,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (casa / "VERSION").read_text() == "0.3.0\n" and (casa / "config" / "categorias.json").read_text() == "v3"
     assert (casa / "dashboard" / "server.py").read_text() == "v3"
     assert (casa / ".claude" / "skills" / "leer-pfg" / "SKILL.md").read_text() == "v3", ".agents/ va también en .claude/"
-    assert not (casa / "tests").exists() and not (casa / ".agents" / "skills" / "verify-tribunal").exists()
+    assert not (casa / "tests").exists() and not (casa / ".agents" / "skills" / "de-desarrollo").exists()
     assert not (casa / "scripts" / "nuevo.py").exists(), "lo que traía la app y la release ya no trae se borra"
     assert (casa / "pfgs" / "demo" / "memoria.pdf").read_text() == "del docente"
     assert not list(Path(tmp).rglob("fuera.txt")) and not list(Path(tmp).rglob("*..*")), "nada se sale de la carpeta"
