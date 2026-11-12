@@ -3,26 +3,25 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const SKILLS = "{leer,grado,preguntas,anotaciones}-pfg"; // las del docente; verify-tribunal es de desarrollo
+const RAIZ = path.join(__dirname, "..");
+// El código que corre en la carpeta de trabajo: lo que necesitan el dashboard y los agentes, nada de desarrollo.
+// Es la misma lista con la que el botón Actualizar saca el código del tarball de la release.
+const CODIGO = JSON.parse(fs.readFileSync(path.join(RAIZ, "scripts", "codigo.json"), "utf8"));
 
 module.exports = {
   appId: "io.github.rubensancor.tribunal-pfg",
   productName: "Tribunal PFG",
   icon: "app/icon.png", // 1024 px; de él salen el .icns de macOS y el .ico de Windows. Fuente: app/icon.svg
-  extraMetadata: { version: fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim() },
+  extraMetadata: { version: fs.readFileSync(path.join(RAIZ, "VERSION"), "utf8").trim() },
   artifactName: "Tribunal-PFG-${version}-${os}-${arch}.${ext}", // sin espacios: GitHub los cambiaría por puntos
   files: ["app/main.js", "package.json"],
-  // El código que corre en la carpeta de trabajo: lo que necesitan el dashboard y los agentes, nada de desarrollo.
   extraResources: [
     {
-      from: ".", to: "tribunal", filter: [
-        "AGENTS.md", "CLAUDE.md", "VERSION", "LICENSE", ".agents/agents/**", `.agents/skills/${SKILLS}/**`,
-        ".codex/**", ".opencode/**", "config/categorias.json", "dashboard/**", "scripts/**", "!**/__pycache__",
-      ],
+      from: ".", to: "tribunal",
+      filter: [...CODIGO.map(p => fs.statSync(path.join(RAIZ, p)).isDirectory() ? `${p}/**` : p), "!**/__pycache__"],
     },
     // .claude/ son enlaces a .agents/ en el repo; aquí van como carpetas, que el instalador de Windows no lleva enlaces.
-    { from: ".agents/agents", to: "tribunal/.claude/agents" },
-    { from: ".agents/skills", to: "tribunal/.claude/skills", filter: [`${SKILLS}/**`] },
+    ...CODIGO.filter(p => p.startsWith(".agents/")).map(p => ({ from: p, to: "tribunal/.claude/" + p.slice(8) })),
     { from: "build/uv/${os}-${arch}", to: "uv", filter: ["uv", "uv.exe"] },
   ],
   beforePack: "app/uv.js",
