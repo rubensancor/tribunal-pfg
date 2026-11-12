@@ -25,6 +25,17 @@ def falla(f, *args):
     raise AssertionError(f"{f.__name__}{args} debía fallar")
 
 
+# escribir aguanta que otro hilo tenga abierto el archivo: en Windows, os.replace fallaba con WinError 5.
+with tempfile.TemporaryDirectory() as tmp:
+    ruta = Path(tmp) / "grado.json"
+    server.escribir(ruta, {"v": 1})
+    with ruta.open(encoding="utf-8"):
+        hilo = threading.Thread(target=server.escribir, args=(ruta, {"v": 2}))
+        hilo.start()
+        time.sleep(0.1)
+    hilo.join()
+    assert server.leer(ruta) == {"v": 2}
+
 # Lo que todo agente falso tiene a mano: el prompt (claude -p <prompt>) y la carpeta del PFG que nombra.
 PRELUDIO = '''import os, re, sys, time
 from pathlib import Path
