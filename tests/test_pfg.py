@@ -28,6 +28,7 @@ def pdf(ruta, n, toc=None, etiquetas=None):
         doc.set_page_labels(etiquetas)
     ruta.parent.mkdir(parents=True)
     doc.save(ruta)
+    doc.close()
 
 
 # Capítulos, preliminares y un capítulo largo que se divide por sus subapartados.
@@ -100,6 +101,7 @@ with tempfile.TemporaryDirectory() as tmp:
     doc[11].insert_font(fontname="F0", fontbuffer=pymupdf.Font("cjk").buffer)  # Helvetica no tiene la ligadura «ﬁ»
     doc[11].insert_text((72, 300), "La eﬁciencia n.º 3 en m²", fontname="F0")
     doc.saveIncr()
+    doc.close()  # Windows no deja borrar un archivo abierto
     pfg.imagen("demo", 12)
     palabras = json.loads((d / "paginas" / "p012.json").read_text(encoding="utf-8"))["palabras"]
     assert [w[4] for w in palabras] == "Contenido de la página 12 La eficiencia n.º 3 en m²".split(), palabras
