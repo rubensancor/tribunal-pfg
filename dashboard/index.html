@@ -577,14 +577,12 @@ const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Fall
   sin_avance: "Terminó sin completar la fase"};
 const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""}${e.despues && e.estado === "en_curso" ? ` · luego, ${h(e.despues.toLowerCase())}` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
   + `${e.estado === "en_curso" ? `<button class="btn" type="button" data-detener>Detener</button>` : ""}</div>`;
-const siguiente = (p, conComando) => {
+const siguiente = p => {
   const e = p.ejecucion, enCurso = e?.estado === "en_curso";
   if (!enCurso && !p.comando) return "";
   if (p.cola && !enCurso) return `<div class="accion" data-pfg="${p.id}"><div class="ejec en_cola"><span>En cola para leer y preguntar · puesto ${p.cola}</span></div></div>`;
   return `<div class="accion" data-pfg="${p.id}">${e && e.estado !== "terminada" ? ejecucion(e) : ""}
-    ${enCurso ? "" : `<div class="botones"><button class="btn primary" type="button" data-ejecutar>${accion(p)} con ${h(p.ejecutor)}</button>
-      ${conComando ? "" : `<button class="btn enlace" type="button" data-copiar="${h(p.comando)}" title="${h(p.comando)}">o copia la instrucción para tu agente</button>`}</div>
-      ${conComando ? `<p class="muted">O pega esta instrucción en tu agente:</p>${comando(p.comando)}` : ""}`}</div>`;
+    ${enCurso ? "" : `<div class="botones"><button class="btn primary" type="button" data-ejecutar>${accion(p)} con ${h(p.ejecutor)}</button></div>`}</div>`;
 };
 const vacio = (titulo, texto = "") => `<div class="vacio"><b>${titulo}</b>${texto}</div>`;
 const error = e => `<p class="error">${h(e)}</p>`;
@@ -690,7 +688,7 @@ function detalle(p, pestana, cat) {
         <button class="btn peligro" type="button" data-borrar="${p.id}" ${datosBorrado(p)}>Borrar</button></div>
     </div>
     ${p.estado === "leyendo" ? progreso(p) : p.estado === "a_medias" ? aMedias(p) : ""}
-    ${siguiente(p) && `<div class="next"><b>Siguiente paso</b>${siguiente(p, true)}</div>`}
+    ${siguiente(p) && `<div class="next"><b>Siguiente paso</b>${siguiente(p)}</div>`}
     ${p.ejecucion ? `<details class="sec"${["fallida", "sin_avance"].includes(p.ejecucion.estado) ? " open" : ""} id="registro"><summary><span class="t">Registro de la última ejecución</span><span class="muted">${EJECUCION[p.ejecucion.estado]}</span></summary>
       <div class="cuerpo"><pre class="log">${h(p.ejecucion.log)}</pre></div></details>` : ""}
     <nav class="tabs">${tabs.map(([k, t]) => `<a href="#/${p.id}/${k}" ${k === pestana ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
