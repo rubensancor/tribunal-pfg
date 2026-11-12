@@ -384,10 +384,10 @@ def programas(gid):
             try:
                 escribir(txt, CONVERSORES[p.suffix](p.read_bytes()).encode())
             except Exception as e:  # un PDF roto no debe impedir leer los demás
-                print(f"no se puede pasar a texto {p.relative_to(RAIZ)}: {e}")
+                print(f"no se puede pasar a texto {p.relative_to(RAIZ).as_posix()}: {e}")
                 continue
         if not ficha.exists() or ficha.stat().st_mtime < txt.stat().st_mtime:
-            pendientes.append(f"{txt.relative_to(RAIZ)} {ficha.relative_to(RAIZ)}")
+            pendientes.append(f"{txt.relative_to(RAIZ).as_posix()} {ficha.relative_to(RAIZ).as_posix()}")  # con «/» también en Windows: la lee la skill
     print("\n".join(["pendientes (texto ficha):", *pendientes]) if pendientes else "ninguno")
     if pendientes:
         sys.exit(2)
