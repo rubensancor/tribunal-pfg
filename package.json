@@ -1,0 +1,17 @@
+{
+  "name": "tribunal-pfg",
+  "private": true,
+  "description": "App de escritorio del Tribunal PFG",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --config app/electron-builder.config.js"
+  },
+  "devDependencies": {
+    "electron": "45.3.1",
+    "electron-builder": "26.18.0"
+  },
+  "allowScripts": {
+    "electron-winstaller": false
+  }
+}

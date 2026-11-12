@@ -1,0 +1,30 @@
+# Al publicar una release (gh release create vX.Y.Z), construye los cuatro instaladores y los cuelga en ella.
+name: Instaladores
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  instaladores:
+    # Desde macOS salen los cuatro: el .dmg necesita macOS, y el .exe y el .AppImage se construyen igual que en su sistema.
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: La tag coincide con VERSION
+        run: test "v$(cat VERSION)" = "$TAG" || { echo "La tag $TAG no coincide con VERSION ($(cat VERSION))"; exit 1; }
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Construye los instaladores
+        run: npm run dist -- --mac --win --linux --publish never
+      - name: Los cuelga en la release
+        run: gh release upload "$TAG" dist/*.dmg dist/*.exe dist/*.AppImage --clobber

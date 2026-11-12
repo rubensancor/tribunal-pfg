@@ -889,6 +889,8 @@ function vistaVersion(v) {
   return `<p><b>Tribunal PFG ${h(v.actual)}</b>${estado ? " · " + estado : ""}</p>${!v.nueva ? "" : v.modo === "git"
     ? `<p style="margin:12px 0 6px"><button class="btn primary" type="button" data-actualizar="${h(v.actual)}">Actualizar a la ${h(v.ultima)}</button></p>
       <p class="muted">El dashboard se reinicia solo. Tus memorias, grados y ajustes no se tocan.</p>`
+    : v.modo === "app" ? `<p>Descarga el instalador nuevo desde ${enlaceExterno(v.url, "su página")} e instálalo encima.
+      Tus memorias, grados y ajustes siguen en la carpeta de trabajo.</p>`
     : `<p>Esta copia no se instaló con git: descarga la versión nueva desde ${enlaceExterno(v.url, "su página")} y copia
       <code>pfgs/</code>, <code>grados/</code> y <code>config/ejecucion.json</code> a la carpeta nueva.</p>`}`;
 }

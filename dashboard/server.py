@@ -50,6 +50,8 @@ PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder pregun
           "de archivos, no la shell.")
 VERSION = (RAIZ / "VERSION").read_text().strip()
 REPO = "rubensancor/tribunal-pfg"
+APP = os.environ.get("TRIBUNAL_APP") == "1"  # lo lanza la app de escritorio (main.js), que pone la ventana
+REINICIO_APP = 75  # tras actualizar, la app vuelve a arrancar el servidor si sale con este código
 AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 
@@ -234,12 +236,12 @@ def guardar_anotacion(d, aid, raw):
     if not isinstance(nota, str) or len(nota) > MAX_NOTA:
         raise ValueError(f"la nota debe ser texto de {MAX_NOTA} caracteres como máximo")
     indice = generado(d, "indice.json")
-    if type(pdf) is not int or not indice or not 1 <= pdf <= len(paginas := json.loads(indice.read_text())):
+    if type(pdf) is not int or not indice or not 1 <= pdf <= len(paginas := json.loads(indice.read_text(encoding="utf-8"))):
         raise ValueError("la página no existe")
     cita = ""
     if palabras is not None:
         texto = generado(d, f"p{pdf:03d}.json")
-        ws = json.loads(texto.read_text())["palabras"] if texto else []
+        ws = json.loads(texto.read_text(encoding="utf-8"))["palabras"] if texto else []
         if not (isinstance(palabras, list) and len(palabras) == 2 and all(type(i) is int for i in palabras)
                 and 0 <= palabras[0] <= palabras[1] < len(ws)):
             raise ValueError("las palabras seleccionadas no están en esa página")
@@ -358,8 +360,17 @@ VERSIONES = {}  # ruta del binario -> primera línea de su --version; «Comproba
 def version(ruta):
     if ruta not in VERSIONES:
         try:
-            r = subprocess.run([ruta, "--version"], capture_output=True, text=True, timeout=3, stdin=subprocess.DEVNULL)
-            linea = next((x.strip() for x in (r.stdout + "\n" + r.stderr).splitlines() if x.strip()), "") if r.returncode == 0 else ""
+            # No subprocess.run(timeout=): solo mata al hijo, y el nieto (lo que lanza un .cmd de npm en Windows)
+            # seguiría con las tuberías abiertas y communicate() lo esperaría. Se baja el árbol entero.
+            p = subprocess.Popen([ruta, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                 stdin=subprocess.DEVNULL, start_new_session=True)
+            try:
+                out, err = p.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                matar_arbol(p)
+                p.communicate(timeout=3)
+                raise
+            linea = next((x.strip() for x in (out + "\n" + err).splitlines() if x.strip()), "") if p.returncode == 0 else ""
         except (OSError, subprocess.TimeoutExpired):
             linea = ""
         VERSIONES[ruta] = linea[:80] or None
@@ -417,7 +428,7 @@ def estado_version():
     u = ULTIMA.get("version")
     return {"actual": VERSION, "ultima": u, "url": ULTIMA.get("url"), "error": ULTIMA.get("error"),
             "nueva": bool(u) and semver(u) > semver(VERSION),
-            "modo": "git" if (RAIZ / ".git").exists() and shutil.which("git") else "zip"}
+            "modo": "git" if (RAIZ / ".git").exists() and shutil.which("git") else "app" if APP else "zip"}
 
 
 def git(*args):
@@ -459,6 +470,8 @@ def actualizar():
 def reiniciar():
     """Sustituye este proceso por el servidor nuevo. Con uv, para que instale las dependencias que añada la versión."""
     print("Actualizado. Reiniciando el dashboard…", flush=True)
+    if APP:  # la app vigila este proceso: si se sustituyera solo, en Windows lo perdería de vista
+        os._exit(REINICIO_APP)
     os.environ["TRIBUNAL_REINICIO"] = "1"
     script = str(Path(__file__).resolve())
     cmd = ([uv, "run", script] if (uv := shutil.which("uv")) else [sys.executable, script]) + sys.argv[1:]
@@ -507,7 +520,7 @@ def ejecucion(pfg_id, paso, con_log=False):
     despues = None
     if e["seguir"] and e["fase"] != "preguntas-pfg":
         despues = FASES["grado-pfg" if e["fase"] == "leer-pfg" and hay_programas() else "preguntas-pfg"]
-    estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 else "fallida" if codigo
+    estado = ("en_curso" if codigo is None else "detenida" if codigo < 0 or e.get("detenida") else "fallida" if codigo
               else "terminada" if avanzo else "sin_avance")
     r = {"paso": e["fase"], "fase": FASES[e["fase"]], "harness": HARNESSES[e["harness"]]["nombre"], "modelo": e["modelo"],
          "esfuerzo": e["esfuerzo"], "inicio": e["inicio"], "estado": estado, "codigo": codigo,
@@ -520,8 +533,10 @@ def ejecucion(pfg_id, paso, con_log=False):
 
 
 def binario(harness):
-    if not shutil.which(b := HARNESSES[harness]["bin"]):
+    """La ruta del harness. Se lanza por ruta: en Windows, Popen("codex") solo encuentra un .exe, no el .cmd de npm."""
+    if not (ruta := shutil.which(b := HARNESSES[harness]["bin"])):
         raise ValueError(f"no se encuentra «{b}» en el PATH")
+    return ruta
 
 
 def lanzar(d, fase=None, seguir=False):
@@ -545,8 +560,9 @@ def lanzar(d, fase=None, seguir=False):
         elif not any(n["pendiente"] for n in anotaciones(d)):
             raise ValueError("no hay notas pendientes de respuesta")
         cfg = config_ejecucion()[fase]
-        binario(cfg["harness"])
+        ruta = binario(cfg["harness"])
         argv = comando_agente(cfg["harness"], cfg["modelo"], cfg["esfuerzo"], f"usa la skill {fase} con el PFG {d.name}")
+        argv[0] = ruta
         log = d / "ejecuciones" / f"{time.strftime('%Y%m%d-%H%M%S')}-{fase}.log"
         log.parent.mkdir(exist_ok=True)
         with open(log, "w", encoding="utf-8") as f:
@@ -606,12 +622,21 @@ def borrar(d):
         shutil.rmtree(d)
 
 
+def matar_arbol(proc):
+    """El proceso y lo que haya lanzado. En POSIX, proc tiene que ir en su propio grupo (start_new_session)."""
+    if os.name == "nt":  # sin grupos de procesos: taskkill /T baja el árbol
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass  # terminó entre poll() y killpg()
+
+
 def detener(e):
     if e["proc"].poll() is None:
-        try:
-            os.killpg(e["proc"].pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass  # terminó entre poll() y killpg()
+        e["detenida"] = True  # taskkill deja el código 1, no uno negativo: sin esto se vería como fallida
+        matar_arbol(e["proc"])
 
 
 def origen_local(host, origen, puerto):
@@ -984,7 +1009,9 @@ def main():
         sys.exit(f"El puerto {puerto} está ocupado: ¿ya está abierto el dashboard? http://127.0.0.1:{puerto}")
     url = f"http://127.0.0.1:{puerto}"
     print(f"Dashboard del tribunal en {url} (versión {VERSION}; Ctrl+C para parar)", flush=True)
-    if not reinicio:  # tras actualizar, la pestaña abierta se recarga sola
+    if APP:  # la app cierra este stdin al salir, o al morir: es la señal de parada que funciona igual en Windows
+        threading.Thread(target=lambda: (sys.stdin.buffer.read(), servidor.shutdown()), daemon=True).start()
+    elif not reinicio:  # tras actualizar, la pestaña abierta se recarga sola
         webbrowser.open(url)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     threading.Thread(target=preparar_cola, daemon=True).start()

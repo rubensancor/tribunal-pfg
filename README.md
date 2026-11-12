@@ -12,6 +12,27 @@ Funciona con Claude Code, Codex, Pi, Antigravity y OpenCode: las skills están e
 
 Las memorias contienen datos personales y trabajo sin publicar. Se quedan en tu ordenador, en `pfgs/`, pero su contenido llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
 
+## Instalación con la app
+
+Es la forma más sencilla. Descarga el instalador de tu sistema desde la [última versión](https://github.com/rubensancor/tribunal-pfg/releases/latest):
+
+| Sistema | Archivo |
+|---|---|
+| macOS con Apple Silicon (M1 o posterior) | `Tribunal-PFG-X.Y.Z-mac-arm64.dmg` |
+| macOS con Intel | `Tribunal-PFG-X.Y.Z-mac-x64.dmg` |
+| Windows | `Tribunal-PFG-X.Y.Z-win-x64.exe` |
+| Linux | `Tribunal-PFG-X.Y.Z-linux-x86_64.AppImage` |
+
+La app trae todo lo que necesita el dashboard: no hace falta terminal, ni uv, ni git. Solo te falta un agente: sigue el paso [4. Instala un agente](#4-instala-un-agente).
+
+La app todavía no está firmada, así que la primera vez el sistema te avisa:
+
+- **macOS**: abre el `.dmg` y arrastra Tribunal PFG a Aplicaciones. Al abrirla, macOS dice que no puede comprobar el desarrollador. Ve a **Ajustes del Sistema → Privacidad y seguridad**, baja hasta el aviso de Tribunal PFG y pulsa **Abrir igualmente**. En macOS 14 o anterior basta con clic derecho en la app → **Abrir**. Solo la primera vez.
+- **Windows**: al ejecutar el instalador sale «Windows protegió su PC». Pulsa **Más información → Ejecutar de todos modos**. Se instala en tu usuario, sin permisos de administrador, y aparece en el menú Inicio.
+- **Linux**: da permiso de ejecución al archivo (`chmod +x Tribunal-PFG-*.AppImage`, o en sus propiedades) y ábrelo. Si no arranca, instala FUSE: `sudo apt install libfuse2t64` en Ubuntu 24.04 o posterior, `libfuse2` en 22.04. Si se queja del sandbox, ábrelo con `--no-sandbox`.
+
+La primera vez tarda un minuto, mientras descarga Python y pymupdf. Tus memorias, grados y ajustes se guardan en **Documentos/Tribunal PFG**. Es la carpeta del proyecto: abre ahí tu agente si quieres lanzar las skills a mano.
+
 ## Instalación con agente
 
 Si ya tienes un agente (Claude Code, Codex u otro), deja que lo instale él. Abre el agente en la carpeta donde quieras guardar la herramienta y pega este texto.
@@ -97,7 +118,7 @@ Con Pi, instala también [pi-subagents](https://github.com/tintinweb/pi-subagent
 ## Uso diario
 
 1. Arrastra los PDF al dashboard.
-2. Cada tarjeta muestra el siguiente paso. Pulsa su botón, como **Leer la memoria con Claude Code**, o copia el comando y pégalo en tu agente, abierto en la carpeta `tribunal-pfg`:
+2. Cada tarjeta muestra el siguiente paso. Pulsa su botón, como **Leer la memoria con Claude Code**, o copia el comando y pégalo en tu agente, abierto en la carpeta del proyecto (`tribunal-pfg`, o `Documentos/Tribunal PFG` si usas la app):
    - `usa la skill leer-pfg con el PFG <id>`
    - `usa la skill grado-pfg con el PFG <id>`, si has cargado programas en **Grados**
    - `usa la skill preguntas-pfg con el PFG <id>`
@@ -145,6 +166,8 @@ Están en `config/categorias.json`; edítalas libremente. Las preguntas se gener
 
 Al arrancar, el dashboard pregunta a GitHub cuál es la última versión publicada. Esa consulta solo envía tu IP a GitHub, nada de tus memorias. Si hay una versión nueva, **Ajustes** la muestra con un enlace a las novedades y el botón **Actualizar**. El botón baja la versión con git y reinicia el dashboard. Para que funcione, no puede haber ninguna ejecución en curso ni nada en la cola. Tus memorias, grados y ajustes no se tocan. Si has editado un archivo que la versión nueva también cambia, como `config/categorias.json`, no actualiza y te dice cuál es. **Comprobar de nuevo** vuelve a consultar.
 
+Con la app, Ajustes te lleva a la página de la versión: descarga el instalador nuevo e instálalo encima. Tus memorias, grados y ajustes siguen en `Documentos/Tribunal PFG`. Si has editado un archivo que la versión nueva también cambia, como `config/categorias.json`, la app conserva el tuyo y te avisa al abrirse.
+
 Si descargaste el ZIP, Ajustes te lleva a la página de la versión. Descarga el ZIP nuevo y copia `pfgs/`, `grados/` y `config/ejecucion.json` a la carpeta nueva.
 
 Si instalaste antes de que existiera el botón, actualiza una vez a mano: `git pull` dentro de la carpeta `tribunal-pfg`, o pídeselo a tu agente. Después reinicia el dashboard.
@@ -181,16 +204,21 @@ OpenCode solo admite los modelos gratuitos de OpenCode Zen que no entrenan con l
 
 ## Windows
 
-`.claude/skills` y `.claude/agents` son enlaces simbólicos. Si git los clona como archivos de texto, activa `git config core.symlinks true` (requiere el modo desarrollador) o copia esas carpetas desde `.agents/`. Si descargaste el ZIP y las skills no aparecen en tu agente, haz lo mismo: copia esas carpetas desde `.agents/`.
+`.claude/skills` y `.claude/agents` son enlaces simbólicos. Si git los clona como archivos de texto, activa `git config core.symlinks true` (requiere el modo desarrollador) o copia esas carpetas desde `.agents/`. Si descargaste el ZIP y las skills no aparecen en tu agente, haz lo mismo: copia esas carpetas desde `.agents/`. La app ya trae esas carpetas.
 
 ## Desarrollo
 
 ```bash
 uv run tests/test_pfg.py
 uv run tests/test_dashboard.py
+uv run tests/test_instalar.py
 ```
 
-Para publicar una versión, sube el número en `VERSION` (semver `0.x`), haz commit en `main` y ejecuta `git tag vX.Y.Z && git push origin main vX.Y.Z && gh release create vX.Y.Z --generate-notes`. El botón Actualizar avanza hasta esa tag, no hasta el último commit de `main`. Cada versión debe seguir leyendo los `pfgs/` de las anteriores.
+El workflow **Tests** los pasa en Linux, macOS y Windows en cada PR y en `main`.
+
+La app de escritorio necesita Node: `npm install` y `npx electron .` para probarla, y `npm run dist -- --mac --win --linux` para dejar los instaladores en `dist/`.
+
+Para publicar una versión, sube el número en `VERSION` (semver `0.x`), haz commit en `main` y ejecuta `git tag vX.Y.Z && git push origin main vX.Y.Z && gh release create vX.Y.Z --generate-notes`. Al publicarse la release, el workflow **Instaladores** construye los cuatro instaladores en un runner de macOS y los cuelga en ella; tarda unos minutos y falla si la tag no coincide con `VERSION`. El botón Actualizar avanza hasta esa tag, no hasta el último commit de `main`. Cada versión debe seguir leyendo los `pfgs/` de las anteriores.
 
 ## Licencia
 

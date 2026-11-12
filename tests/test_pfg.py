@@ -28,6 +28,7 @@ def pdf(ruta, n, toc=None, etiquetas=None):
         doc.set_page_labels(etiquetas)
     ruta.parent.mkdir(parents=True)
     doc.save(ruta)
+    doc.close()
 
 
 # Capítulos, preliminares y un capítulo largo que se divide por sus subapartados.
@@ -52,9 +53,9 @@ with tempfile.TemporaryDirectory() as tmp:
     pdf(d / "memoria.pdf", 60, toc, [{"startpage": 0, "prefix": "", "style": "r", "firstpagenum": 1},
                                      {"startpage": 2, "prefix": "", "style": "D", "firstpagenum": 1}])
     pfg.trocear("demo")
-    indice = json.loads((d / "secciones" / "indice.json").read_text())
+    indice = json.loads((d / "secciones" / "indice.json").read_text(encoding="utf-8"))
     assert indice[0]["titulo"] == "Preliminares / Introducción" and indice[1]["pdf_ini"] == 10
-    texto = (d / "secciones" / "00.txt").read_text()
+    texto = (d / "secciones" / "00.txt").read_text(encoding="utf-8")
     assert texto.startswith("# Preliminares") and "[[pdf:1 pág:i]]" in texto and "[[pdf:3 pág:1]]" in texto
 
     assert "secciones/00.json: falta" in pfg.validar(d)
@@ -88,22 +89,23 @@ with tempfile.TemporaryDirectory() as tmp:
     # Sin etiquetas de página la marca solo lleva el número del PDF.
     pdf(Path(tmp) / "plano" / "memoria.pdf", 3)
     pfg.trocear("plano")
-    assert "[[pdf:2]]" in (Path(tmp) / "plano" / "secciones" / "00.txt").read_text()
+    assert "[[pdf:2]]" in (Path(tmp) / "plano" / "secciones" / "00.txt").read_text(encoding="utf-8")
 
     # Lo que lee el lector del dashboard: tamaño y etiqueta de cada página, y las palabras en el orden de NN.txt.
     pfg.paginas("demo")
-    paginas = json.loads((d / "paginas" / "indice.json").read_text())
+    paginas = json.loads((d / "paginas" / "indice.json").read_text(encoding="utf-8"))
     assert len(paginas) == 60 and paginas[0] == {"w": 595.0, "h": 842.0, "pag": "i"} and paginas[2]["pag"] == "1"
     pfg.paginas("plano")
-    assert json.loads((Path(tmp) / "plano" / "paginas" / "indice.json").read_text())[0]["pag"] is None
+    assert json.loads((Path(tmp) / "plano" / "paginas" / "indice.json").read_text(encoding="utf-8"))[0]["pag"] is None
     doc = pymupdf.open(d / "memoria.pdf")
     doc[11].insert_font(fontname="F0", fontbuffer=pymupdf.Font("cjk").buffer)  # Helvetica no tiene la ligadura «ﬁ»
     doc[11].insert_text((72, 300), "La eﬁciencia n.º 3 en m²", fontname="F0")
     doc.saveIncr()
+    doc.close()  # Windows no deja borrar un archivo abierto
     pfg.imagen("demo", 12)
-    palabras = json.loads((d / "paginas" / "p012.json").read_text())["palabras"]
+    palabras = json.loads((d / "paginas" / "p012.json").read_text(encoding="utf-8"))["palabras"]
     assert [w[4] for w in palabras] == "Contenido de la página 12 La eficiencia n.º 3 en m²".split(), palabras
-    assert " ".join(w[4] for w in palabras[:5]) in (d / "secciones" / "01.txt").read_text()  # la sección 01 empieza en el pdf 10
+    assert " ".join(w[4] for w in palabras[:5]) in (d / "secciones" / "01.txt").read_text(encoding="utf-8")  # la sección 01 empieza en el pdf 10
     x0, y0, x1, y1, _ = palabras[0]
     assert 0 < x0 < x1 < 1 and 0 < y0 < y1 < 1 and abs(x0 - 72 / 595) < .01, palabras[0]
     assert (d / "paginas" / "p012.png").read_bytes().startswith(b"\x89PNG")
@@ -144,11 +146,11 @@ with tempfile.TemporaryDirectory() as tmp:
     codigo, salida = cli("programas", "grado-en-informatica")
     assert codigo == 2 and salida.splitlines()[1:] == [f"grados/grado-en-informatica/textos/{s}.txt grados/grado-en-informatica/asignaturas/{s}.json"
                                                        for s in ("145320", "redes", "so")], salida
-    texto = (g / "textos" / "145320.txt").read_text()
+    texto = (g / "textos" / "145320.txt").read_text(encoding="utf-8")
     assert texto.splitlines() == ["Asignatura:", "145320 - Arquitectura", "Titulación:", "14402 - Grado en Informática",
                                   "Curso:", "2024 - Grado en Informática: 3", "Tipo:", "Obligatoria", "Contenidos",
                                   "TEMA 1: Rendimiento (Amdahl)", "TEMA 2: Jerarquía de memoria"], texto
-    assert "[[pdf:2]]\nTema 1. Procesos" in (g / "textos" / "so.txt").read_text() and (g / "textos" / "redes.txt").read_text() == "Redes\nTema 1. TCP/IP\n"
+    assert "[[pdf:2]]\nTema 1. Procesos" in (g / "textos" / "so.txt").read_text(encoding="utf-8") and (g / "textos" / "redes.txt").read_text(encoding="utf-8") == "Redes\nTema 1. TCP/IP\n"
     assert pfg.texto_html("<p>Sin marcadores</p><p>Tema único</p>".encode()) == "Sin marcadores\nTema único\n", "sin marcadores, todo"
 
     ficha = {"asignatura": "Arquitectura", "codigo": "145320", "curso": 3, "caracter": "obligatoria",
@@ -170,7 +172,7 @@ with tempfile.TemporaryDirectory() as tmp:
     (g / "programas" / "redes.txt").write_text("Redes II\n")
     assert cli("programas", "grado-en-informatica")[1].splitlines()[1:] == [
         "grados/grado-en-informatica/textos/redes.txt grados/grado-en-informatica/asignaturas/redes.json"], "un programa cambiado vuelve a leerse"
-    assert (g / "textos" / "redes.txt").read_text() == "Redes II\n"
+    assert (g / "textos" / "redes.txt").read_text(encoding="utf-8") == "Redes II\n"
 
     # El contraste de un PFG con su grado.
     def contraste(**c):
