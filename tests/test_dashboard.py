@@ -328,7 +328,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] == "Añade el permiso."
     codigo, cuerpo = pedir("/api/config")
     c = json.loads(cuerpo)
-    assert codigo == 200 and set(c) == {"fases", "error", "sistema", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
+    assert codigo == 200 and set(c) == {"fases", "error", "sistema", "version", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
     assert c["sistema"] == {"id": server.SISTEMA, "nombre": server.SISTEMAS[server.SISTEMA]}
     assert server.SISTEMA == {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
     for k, v in c["harnesses"].items():
@@ -552,5 +552,67 @@ with tempfile.TemporaryDirectory() as tmp:
     assert json.loads(pedir("/api/grados")[1]) == [] and server.resumen(d)["paso"] is None
     guias.shutdown()
     srv.shutdown()
+
+# Actualizar: solo un avance directo hasta la release, nunca con cambios del docente ni con algo en marcha.
+assert server.semver(server.VERSION), "VERSION debe ser x.y.z"
+assert server.semver("v0.10.0") > server.semver("0.9.3") and server.semver("v1.2") is None and server.semver(None) is None
+with tempfile.TemporaryDirectory() as tmp:
+    tmp, raiz = Path(tmp), server.RAIZ
+
+    def sh(*args, cwd=tmp):
+        server.subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=cwd, check=True, capture_output=True)
+
+    sh("init", "-q", "-b", "main", "origen")
+    (tmp / "origen" / "categorias.json").write_text("{}")
+    sh("add", "categorias.json", cwd=tmp / "origen")
+    for v in ("0.1.0", "0.2.0"):
+        (tmp / "origen" / "VERSION").write_text(v + "\n")
+        sh("add", "VERSION", cwd=tmp / "origen")
+        sh("commit", "-qm", v, cwd=tmp / "origen")
+        sh("tag", "v" + v, cwd=tmp / "origen")
+    (tmp / "origen" / "VERSION").write_text("0.3.0-sin-publicar\n")
+    sh("commit", "-qam", "sin publicar", cwd=tmp / "origen")
+    sh("clone", "-q", "origen", "copia")
+    copia = tmp / "copia"
+    sh("reset", "-q", "--hard", "v0.1.0", cwd=copia)
+    (copia / "pfgs").mkdir()
+    (copia / "pfgs" / "dato").write_text("del docente")  # sin ignorar en este repo: tampoco bloquea
+    server.RAIZ, server.VERSION, server.ULTIMA = copia, "0.1.0", {"version": "0.2.0", "url": "https://x"}
+    try:
+        assert server.estado_version() | {"url": None} == {"actual": "0.1.0", "ultima": "0.2.0", "url": None, "error": None,
+                                                         "nueva": True, "modo": "git"}
+        (copia / "VERSION").write_text("tocado\n")
+        assert "VERSION" in falla(server.actualizar) and not server.CERROJO.locked()
+        sh("checkout", "-q", "VERSION", cwd=copia)
+
+        class Viva:
+            def poll(self):
+                return None
+        server.EJECUCIONES["viva"] = {"proc": Viva()}
+        assert "ejecuciones en curso" in falla(server.actualizar) and not server.CERROJO.locked()
+        del server.EJECUCIONES["viva"]
+        (copia / "categorias.json").write_text('{"mias": 1}')  # la versión nueva no lo cambia: se conserva
+
+        reinicios = []
+        server.reiniciar = lambda: reinicios.append(1)
+        srv = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_port}"
+        assert pedir("/api/actualizar", {}, "https://evil.example")[0] == 403 and not reinicios
+        assert pedir("/api/actualizar", {}) == (202, b'{"ok": true}') and reinicios == [1]
+        assert (copia / "VERSION").read_text() == "0.2.0\n", "llega a la release, no al último commit"
+        assert (copia / "pfgs" / "dato").read_text() == "del docente"
+        assert (copia / "categorias.json").read_text() == '{"mias": 1}'
+        assert server.CERROJO.locked(), "nada empieza hasta el reinicio"
+        server.CERROJO.release()
+
+        server.VERSION = "0.2.0"
+        assert not server.estado_version()["nueva"] and "última versión" in falla(server.actualizar)
+        assert json.loads(pedir("/api/version")[1])["actual"] == "0.2.0"
+        server.RAIZ, server.VERSION = tmp, "0.1.0"
+        assert server.estado_version()["modo"] == "zip" and "no se instaló con git" in falla(server.actualizar)
+        srv.shutdown()
+    finally:
+        server.RAIZ, server.VERSION = raiz, (raiz / "VERSION").read_text().strip()
 
 print("ok")

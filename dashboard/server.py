@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import unicodedata
+import urllib.error
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -47,6 +48,8 @@ PROMPT = ("{comando}. Estás en modo no interactivo: nadie va a responder pregun
           + " y ".join(f"`{c} …`" for c in COMANDOS_SKILLS) +
           ": cualquier otro comando se deniega y corta la ejecución. Para leer, buscar o contar usa tus herramientas "
           "de archivos, no la shell.")
+VERSION = (RAIZ / "VERSION").read_text().strip()
+REPO = "rubensancor/tribunal-pfg"
 AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 
@@ -384,7 +387,90 @@ def detectar(forzar=False):
     return r
 
 
+ULTIMA = {}  # la última release de GitHub, {version, url} o {error}; «Comprobar de nuevo» la vuelve a pedir
+
+
+def semver(v):
+    """«v0.2.0» -> (0, 2, 0); None si no es una versión."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", v) if isinstance(v, str) else None
+    return tuple(map(int, m.groups())) if m else None
+
+
+def comprobar_version():
+    """Pide a GitHub la última release. No envía nada del docente ni de las memorias."""
+    global ULTIMA
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
+                                     headers={"User-Agent": "tribunal-pfg", "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            rel = json.load(r)
+        if not semver(rel.get("tag_name")):
+            raise ValueError
+        ULTIMA = {"version": rel["tag_name"].lstrip("v"), "url": rel.get("html_url")}
+    except urllib.error.HTTPError as e:  # 404: el repositorio aún no ha publicado ninguna release
+        ULTIMA = {} if e.code == 404 else {"error": "No se ha podido comprobar si hay una versión nueva."}
+    except (OSError, ValueError, AttributeError):  # sin red o una respuesta rara
+        ULTIMA = {"error": "No se ha podido comprobar si hay una versión nueva."}
+
+
+def estado_version():
+    u = ULTIMA.get("version")
+    return {"actual": VERSION, "ultima": u, "url": ULTIMA.get("url"), "error": ULTIMA.get("error"),
+            "nueva": bool(u) and semver(u) > semver(VERSION),
+            "modo": "git" if (RAIZ / ".git").exists() and shutil.which("git") else "zip"}
+
+
+def git(*args):
+    r = subprocess.run(["git", *args], cwd=RAIZ, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
+                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    if r.returncode:
+        raise ValueError(f"git {args[0]} ha fallado: " + ((r.stderr or r.stdout).strip().splitlines() or ["sin mensaje"])[0])
+    return r.stdout
+
+
+def actualizar():
+    """Avanza la copia hasta la última release, solo si es un avance directo. Si sale bien, vuelve con CERROJO
+    cogido: nada puede empezar hasta el reinicio."""
+    v = estado_version()
+    if v["modo"] != "git":
+        raise ValueError("esta copia no se instaló con git: descarga la versión nueva desde su página")
+    if not v["nueva"]:
+        raise ValueError("ya tienes la última versión")
+    CERROJO.acquire()
+    try:
+        if any(e["proc"].poll() is None for e in EJECUCIONES.values()):
+            raise ValueError("espera a que terminen las ejecuciones en curso, o detenlas, antes de actualizar")
+        if COLA or any(x["estado"] in ("en_cola", "descargando") for xs in DESCARGAS.values() for x in xs):
+            raise ValueError("espera a que se vacíe la cola y terminen las descargas: al reiniciar se perderían")
+        tag = "v" + v["ultima"]
+        git("fetch", "--no-tags", "origin", "tag", tag)
+        # Solo bloquea lo que el docente cambió y la versión nueva también (categorias.json, por ejemplo); el resto se
+        # conserva. Lo ignorado (pfgs/, grados/, config/ejecucion.json) ni aparece: nunca bloquea ni se toca.
+        tocados = set(git("diff", "--name-only", "HEAD", tag).splitlines())
+        if choques := [c[3:] for c in git("status", "--porcelain", "--untracked-files=no").splitlines() if c[3:] in tocados]:
+            raise ValueError("la versión nueva cambia archivos que tú has modificado: " + ", ".join(choques)
+                             + ". Guarda una copia, deshaz esos cambios con git checkout -- <archivo>, actualiza y vuelve a aplicarlos")
+        git("merge", "--ff-only", tag)
+    except BaseException:
+        CERROJO.release()
+        raise
+
+
+def reiniciar():
+    """Sustituye este proceso por el servidor nuevo. Con uv, para que instale las dependencias que añada la versión."""
+    print("Actualizado. Reiniciando el dashboard…", flush=True)
+    os.environ["TRIBUNAL_REINICIO"] = "1"
+    script = str(Path(__file__).resolve())
+    cmd = ([uv, "run", script] if (uv := shutil.which("uv")) else [sys.executable, script]) + sys.argv[1:]
+    if os.name == "nt":  # en Windows os.execv no entrecomilla: una ruta con espacios rompería el arranque
+        subprocess.Popen(cmd)
+        os._exit(0)
+    os.execv(cmd[0], cmd)
+
+
 def vista_config(forzar=False):
+    if forzar:
+        comprobar_version()
     try:
         validar_config(leer(CONFIG_EJECUCION) or {})
         error = None
@@ -393,7 +479,7 @@ def vista_config(forzar=False):
     estados = detectar(forzar)
     so = "windows" if SISTEMA == "windows" else "unix"
     return {"fases": {f: {"nombre": FASES[f], **c} for f, c in config_ejecucion().items()}, "error": error,
-            "sistema": {"id": SISTEMA, "nombre": SISTEMAS[SISTEMA]},
+            "sistema": {"id": SISTEMA, "nombre": SISTEMAS[SISTEMA]}, "version": estado_version(),
             "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "esfuerzos": h["esfuerzos"], "nota": h["nota"],
                               "instalar": {"comando": h["instalar"][so], "url": h["instalar"]["url"]}, **estados[k]}
                           for k, h in HARNESSES.items()}}
@@ -775,6 +861,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.responder(200, FUENTE.read_bytes(), "font/woff2")
         if ruta == "/api/config":
             return self.responder(200, vista_config())
+        if ruta == "/api/version":
+            return self.responder(200, estado_version())
         if ruta == "/api/pfgs":
             dirs = [d for d in PFGS.iterdir() if (d / "memoria.pdf").exists()] if PFGS.exists() else []
             return self.responder(200, sorted((resumen(d) for d in dirs), key=lambda r: -r["modificado"]))
@@ -805,6 +893,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path == "/api/config/detectar":
                 return self.responder(200, vista_config(forzar=True))
+            if url.path == "/api/actualizar":
+                actualizar()
+                self.responder(202, {"ok": True})  # sin búfer: la respuesta ya ha salido cuando el proceso se sustituye
+                return reiniciar()
             if url.path == "/api/config":
                 cfg = validar_config(self.cuerpo_json())
                 CONFIG_EJECUCION.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -881,17 +973,24 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     puerto = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    try:
-        servidor = ThreadingHTTPServer(("127.0.0.1", puerto), Handler)
-    except OSError:
+    reinicio = os.environ.pop("TRIBUNAL_REINICIO", None)
+    for _ in range(40 if reinicio else 1):  # en Windows el proceso anterior puede tardar en soltar el puerto
+        try:
+            servidor = ThreadingHTTPServer(("127.0.0.1", puerto), Handler)
+            break
+        except OSError:
+            time.sleep(0.25)
+    else:
         sys.exit(f"El puerto {puerto} está ocupado: ¿ya está abierto el dashboard? http://127.0.0.1:{puerto}")
     url = f"http://127.0.0.1:{puerto}"
-    print(f"Dashboard del tribunal en {url} (Ctrl+C para parar)", flush=True)
-    webbrowser.open(url)
+    print(f"Dashboard del tribunal en {url} (versión {VERSION}; Ctrl+C para parar)", flush=True)
+    if not reinicio:  # tras actualizar, la pestaña abierta se recarga sola
+        webbrowser.open(url)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     threading.Thread(target=preparar_cola, daemon=True).start()
     threading.Thread(target=detectar, daemon=True).start()  # las versiones, en caché antes de abrir Ajustes
     threading.Thread(target=descargar_cola, daemon=True).start()
+    threading.Thread(target=comprobar_version, daemon=True).start()
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:

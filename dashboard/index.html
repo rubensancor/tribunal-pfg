@@ -871,8 +871,9 @@ const faltaHarness = hk => ({no_instalado: "No está instalado: instálalo abajo
   requisito: "Le falta un permiso: míralo abajo."})[harnesses[hk]?.estado] || "";
 const urlCorta = u => u.replace(/^https:\/\//, "").replace(/\/$/, "");
 let sistema = {id: "", nombre: ""};  // el del ordenador donde corre el servidor, que es el del docente
+const enlaceExterno = (url, texto) => `<a href="${h(url)}" target="_blank" rel="noopener noreferrer">${h(texto)}</a>`;
 function vistaHarness([hk, hv]) {
-  const enlace = `<a href="${h(hv.instalar.url)}" target="_blank" rel="noopener noreferrer">${h(urlCorta(hv.instalar.url))}</a>`;
+  const enlace = enlaceExterno(hv.instalar.url, urlCorta(hv.instalar.url));
   const estado = ESTADO_HARNESS[hv.estado] + (hv.estado !== "no_instalado" && hv.version ? ` · ${hv.version}` : "");
   return `<li data-harness="${hk}"><div class="cab"><b>${h(hv.nombre)}</b><span class="estado-h ${hv.estado}">${h(estado)}</span></div>
     ${hv.estado !== "no_instalado" ? "" : hv.instalar.comando
@@ -881,6 +882,15 @@ function vistaHarness([hk, hv]) {
       : `<p>En ${h(sistema.nombre)} no tiene un comando de instalación: descárgalo desde su página oficial, ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`}
     ${hv.estado === "requisito" ? `<p class="pendiente">${h(hv.problema)}</p>` : ""}
     <p class="muted">${h(hv.nota)}</p></li>`;
+}
+function vistaVersion(v) {
+  const estado = v.nueva ? `Hay una versión nueva, la ${h(v.ultima)}${v.url ? ` (${enlaceExterno(v.url, "novedades")})` : ""}.`
+    : v.ultima ? "Es la última versión." : v.error ? h(v.error) : "";
+  return `<p><b>Tribunal PFG ${h(v.actual)}</b>${estado ? " · " + estado : ""}</p>${!v.nueva ? "" : v.modo === "git"
+    ? `<p style="margin:12px 0 6px"><button class="btn primary" type="button" data-actualizar="${h(v.actual)}">Actualizar a la ${h(v.ultima)}</button></p>
+      <p class="muted">El dashboard se reinicia solo. Tus memorias, grados y ajustes no se tocan.</p>`
+    : `<p>Esta copia no se instaló con git: descarga la versión nueva desde ${enlaceExterno(v.url, "su página")} y copia
+      <code>pfgs/</code>, <code>grados/</code> y <code>config/ejecucion.json</code> a la carpeta nueva.</p>`}`;
 }
 function vistaAjustes(c) {
   harnesses = c.harnesses;
@@ -896,6 +906,7 @@ function vistaAjustes(c) {
     <p class="muted">Qué harness, qué modelo y con cuánto esfuerzo de razonamiento se ejecuta cada fase al pulsar «Ejecutar». Sin modelo o sin esfuerzo, se usa el que tenga configurado el harness.
       El contenido de las memorias llega al proveedor del modelo: usa la herramienta de IA que autorice tu universidad.</p>
     ${c.error ? error(c.error) : ""}
+    <div class="bloque" id="version" style="margin-bottom:16px">${vistaVersion(c.version)}</div>
     <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th><th>Harness</th><th>Modelo</th><th>Esfuerzo</th></tr></thead>
       <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
       ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
@@ -1076,15 +1087,31 @@ document.addEventListener("click", async e => {
       const txt = await r.text();
       pintado = location.hash + txt;  // el latido no repinta lo mismo encima
       harnesses = JSON.parse(txt).harnesses;
+      $("#version").innerHTML = vistaVersion(JSON.parse(txt).version);
       $("#main .harnesses").innerHTML = Object.entries(harnesses).map(vistaHarness).join("");
       document.querySelectorAll('#ajustes select[name$=".harness"]').forEach(s => {
         [...s.options].forEach(o => o.textContent = harnesses[o.value].nombre + (harnesses[o.value].estado === "no_instalado" ? " (no instalado)" : ""));
         $(`#falta-${s.name.split(".")[0]}`).textContent = faltaHarness(s.value);
       });
-      aviso("Harnesses comprobados.");
+      aviso("Harnesses y versión comprobados.");
     } catch { aviso("No se ha podido comprobar los harnesses."); }
     detectar.disabled = false; detectar.textContent = "Comprobar de nuevo";
     return;
+  }
+  const actualizar = e.target.closest("[data-actualizar]");
+  if (actualizar) {
+    const texto = actualizar.textContent;
+    actualizar.disabled = true; actualizar.textContent = "Actualizando…";
+    reiniciando = true;  // el latido no avisa de «no se puede conectar» mientras arranca el servidor nuevo
+    if (!await post("/api/actualizar")) { reiniciando = false; actualizar.disabled = false; actualizar.textContent = texto; return; }
+    aviso("Actualizado. Reiniciando el dashboard…");
+    for (let i = 0; i < 120; i++) {  // el servidor nuevo responde con otra versión
+      await new Promise(r => setTimeout(r, 1000));
+      const v = await fetch("/api/version").then(r => r.ok ? r.json() : null).catch(() => null);
+      if (v && v.actual !== actualizar.dataset.actualizar) return location.reload();
+    }
+    reiniciando = false;
+    return aviso("El dashboard no ha vuelto a arrancar: páralo con Ctrl+C y ejecuta uv run dashboard/server.py.");
   }
   const leer = e.target.closest("[data-leer]");
   if (leer && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) {
@@ -1496,7 +1523,8 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("mousedown", e => { if (!e.target.closest("#pop, #hojas")) $("#pop").hidden = true; });
 
-(function latir() { setTimeout(async () => { try { if (!document.hidden) await cargar(); } finally { latir(); } }, rapido ? 1000 : 4000); })();
+let reiniciando = false;
+(function latir() { setTimeout(async () => { try { if (!document.hidden && !reiniciando) await cargar(); } finally { latir(); } }, rapido ? 1000 : 4000); })();
 cargar();
 </script>
 </body>

@@ -141,6 +141,14 @@ Todo queda en `grados/`, que no se sube a git.
 
 Están en `config/categorias.json`; edítalas libremente. Las preguntas se generan **sin conocer las categorías** y un agente aparte las clasifica después. Así no aparece una pregunta por categoría solo porque la categoría existe. Que una categoría se quede vacía es normal.
 
+## Actualizar
+
+Al arrancar, el dashboard pregunta a GitHub cuál es la última versión publicada. Esa consulta solo envía tu IP a GitHub, nada de tus memorias. Si hay una versión nueva, **Ajustes** la muestra con un enlace a las novedades y el botón **Actualizar**. El botón baja la versión con git y reinicia el dashboard. Para que funcione, no puede haber ninguna ejecución en curso ni nada en la cola. Tus memorias, grados y ajustes no se tocan. Si has editado un archivo que la versión nueva también cambia, como `config/categorias.json`, no actualiza y te dice cuál es. **Comprobar de nuevo** vuelve a consultar.
+
+Si descargaste el ZIP, Ajustes te lleva a la página de la versión. Descarga el ZIP nuevo y copia `pfgs/`, `grados/` y `config/ejecucion.json` a la carpeta nueva.
+
+Si instalaste antes de que existiera el botón, actualiza una vez a mano: `git pull` dentro de la carpeta `tribunal-pfg`, o pídeselo a tu agente. Después reinicia el dashboard.
+
 ## Privacidad
 
 Las memorias y tus notas se quedan en `pfgs/`, que no se sube a git. Las notas personales no las lee ningún agente. Para quitar una, pulsa **Borrar** en su detalle; para quitar varias, márcalas en la lista y pulsa **Borrar seleccionados**. En los dos casos se borran el PDF y todo lo generado a partir de él. El dashboard solo escucha en `127.0.0.1`. El contenido sí llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
@@ -181,6 +189,8 @@ OpenCode solo admite los modelos gratuitos de OpenCode Zen que no entrenan con l
 uv run tests/test_pfg.py
 uv run tests/test_dashboard.py
 ```
+
+Para publicar una versión, sube el número en `VERSION` (semver `0.x`), haz commit en `main` y ejecuta `git tag vX.Y.Z && git push origin main vX.Y.Z && gh release create vX.Y.Z --generate-notes`. El botón Actualizar avanza hasta esa tag, no hasta el último commit de `main`. Cada versión debe seguir leyendo los `pfgs/` de las anteriores.
 
 ## Licencia
 
