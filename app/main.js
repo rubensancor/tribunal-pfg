@@ -82,7 +82,8 @@ function arrancar(reinicio) {
 async function esperar(url) {
   while (vivo()) {
     try {
-      await fetch(url);
+      // Hay que leer el cuerpo: si server.py cierra el socket con él sin leer, undici salta con assert(!this.paused).
+      await (await fetch(url)).arrayBuffer();
       return true;
     } catch {
       await new Promise(r => setTimeout(r, 300));
