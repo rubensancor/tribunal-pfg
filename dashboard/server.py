@@ -236,12 +236,12 @@ def guardar_anotacion(d, aid, raw):
     if not isinstance(nota, str) or len(nota) > MAX_NOTA:
         raise ValueError(f"la nota debe ser texto de {MAX_NOTA} caracteres como máximo")
     indice = generado(d, "indice.json")
-    if type(pdf) is not int or not indice or not 1 <= pdf <= len(paginas := json.loads(indice.read_text())):
+    if type(pdf) is not int or not indice or not 1 <= pdf <= len(paginas := json.loads(indice.read_text(encoding="utf-8"))):
         raise ValueError("la página no existe")
     cita = ""
     if palabras is not None:
         texto = generado(d, f"p{pdf:03d}.json")
-        ws = json.loads(texto.read_text())["palabras"] if texto else []
+        ws = json.loads(texto.read_text(encoding="utf-8"))["palabras"] if texto else []
         if not (isinstance(palabras, list) and len(palabras) == 2 and all(type(i) is int for i in palabras)
                 and 0 <= palabras[0] <= palabras[1] < len(ws)):
             raise ValueError("las palabras seleccionadas no están en esa página")

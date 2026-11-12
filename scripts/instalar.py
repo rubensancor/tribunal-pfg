@@ -65,4 +65,4 @@ def instalar(origen, destino):
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         sys.exit(__doc__)
-    print(json.dumps(instalar(sys.argv[1], sys.argv[2]), ensure_ascii=False))
+    print(json.dumps(instalar(sys.argv[1], sys.argv[2])))  # en ASCII: la consola de Windows no es UTF-8
