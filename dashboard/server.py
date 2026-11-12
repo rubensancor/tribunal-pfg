@@ -193,6 +193,16 @@ def objeto(x):
 def escribir(ruta, obj):
     tmp = ruta.with_name(f".{ruta.name}.tmp")
     tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    reemplazar(tmp, ruta)
+
+
+def reemplazar(tmp, ruta):
+    """En Windows, os.replace falla (WinError 5) mientras otro hilo lee `ruta` sin CERROJO: reintenta un momento."""
+    for _ in range(100):
+        try:
+            return os.replace(tmp, ruta)
+        except PermissionError:
+            time.sleep(0.01)
     os.replace(tmp, ruta)
 
 
@@ -721,7 +731,7 @@ def poner_programa(g, s, ext, datos, fuente=None):
             viejo.unlink(missing_ok=True)
         tmp = g / "programas" / f".{s}{ext}.tmp"
         tmp.write_bytes(datos)
-        os.replace(tmp, g / "programas" / f"{s}{ext}")
+        reemplazar(tmp, g / "programas" / f"{s}{ext}")
         fuentes = meta.setdefault("fuentes", {})
         if fuente:
             fuentes[s] = fuente
