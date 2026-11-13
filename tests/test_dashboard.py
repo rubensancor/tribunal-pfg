@@ -672,7 +672,12 @@ with tempfile.TemporaryDirectory() as tmp:
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{srv.server_port}"
         assert pedir("/api/actualizar", {}, "https://evil.example")[0] == 403 and not reinicios
-        assert pedir("/api/actualizar", {}) == (202, b'{"ok": true}') and reinicios == [1]
+        assert pedir("/api/actualizar", {}) == (202, b'{"ok": true}')
+        for _ in range(100):  # el servidor responde antes de reiniciar: la respuesta puede llegar primero
+            if reinicios:
+                break
+            time.sleep(0.01)
+        assert reinicios == [1], reinicios
         assert (copia / "VERSION").read_text(encoding="utf-8") == "0.2.0\n", "llega a la release, no al último commit"
         assert (copia / "pfgs" / "dato").read_text(encoding="utf-8") == "del docente"
         assert (copia / "categorias.json").read_text(encoding="utf-8") == '{"mias": 1}'
