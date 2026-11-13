@@ -561,6 +561,7 @@ def ejecucion(pfg_id, paso, con_log=False):
         with open(e["log"], "rb") as f:
             f.seek(max(f.seek(0, 2) - 6000, 0))
             r["log"] = f.read().decode(errors="replace")
+        r["version"] = VERSION  # para el informe de error que se envía por correo
     return r
 
 

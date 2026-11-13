@@ -118,7 +118,7 @@ async function iniciar() {
   ventana.webContents.on("will-navigate", (e, url) => {
     if (url.startsWith(base + "/")) return;
     e.preventDefault();
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    if (/^(https?:\/\/|mailto:)/.test(url)) shell.openExternal(url);  // mailto: abre la app de correo
   });
   if (app.isPackaged) await instalar();  // si falla, fallo() cierra la app y esta promesa no se resuelve
   arrancar(false);

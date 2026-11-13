@@ -137,6 +137,7 @@ print("hecho: " + prompt)
     server.lanzar(d)
     e = esperar("sin_avance")
     assert e["fase"] == "Lectura de la memoria" and e["paso"] == "leer-pfg" and "hecho: usa la skill leer-pfg con el PFG demo." in e["log"], e["log"]
+    assert e["version"] == server.VERSION, e
     assert server.resumen(d)["ejecutor"] == "Claude Code"
     server.PROMPT = "{comando} avanzar"
     agente_falso(agente, '''
