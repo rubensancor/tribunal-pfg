@@ -577,6 +577,18 @@ const EJECUCION = {en_curso: "Ejecutando", terminada: "Terminó", fallida: "Fall
   sin_avance: "Terminó sin completar la fase"};
 const ejecucion = e => `<div class="ejec ${e.estado}"><span>${EJECUCION[e.estado]}: ${h(e.fase)} con ${h(e.harness)}${e.modelo || e.esfuerzo ? ` (${h([e.modelo, e.esfuerzo && `esfuerzo ${e.esfuerzo}`].filter(Boolean).join(", "))})` : ""}${e.despues && e.estado === "en_curso" ? ` · luego, ${h(e.despues.toLowerCase())}` : ""} · ${fecha(e.inicio)}${e.estado === "fallida" ? ` · código ${e.codigo}` : ""}</span>`
   + `${e.estado === "en_curso" ? `<button class="btn" type="button" data-detener>Detener</button>` : ""}</div>`;
+// Informe de una ejecución fallida para mandarlo al autor: por correo o, si no se abre la app de correo, copiado.
+const CORREO = "ruben.sanchez@deusto.es";
+const informe = (p, e, log) => [`PFG: ${p.id}`, `Tribunal PFG ${e.version} · ${navigator.platform}`,
+  `${EJECUCION[e.estado]}: ${e.fase} con ${[e.harness, e.modelo, e.esfuerzo].filter(Boolean).join(" ")}${e.codigo ? ` · código ${e.codigo}` : ""}`,
+  "", "Revisa el registro antes de enviarlo: puede citar la memoria.", "", log].join("\n");
+const enviarRegistro = (p, e) => {
+  const asunto = `Tribunal PFG ${e.version}: error en ${e.fase.toLowerCase()} (${e.harness})`;
+  // muchos clientes de correo cortan los mailto largos: va la cola del registro y el completo se copia
+  const cuerpo = informe(p, e, (e.log.length > 1500 ? "[…registro recortado: pega aquí el completo con «Copiar registro»]\n" : "") + e.log.slice(-1500));
+  return `<div class="botones"><a class="btn" href="mailto:${CORREO}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}">Enviar registro por correo</a>
+    <button class="btn" type="button" data-copiar="${h(informe(p, e, e.log))}">Copiar registro</button></div>`;
+};
 const siguiente = (p, conComando) => {
   const e = p.ejecucion, enCurso = e?.estado === "en_curso";
   if (!enCurso && !p.comando) return "";
@@ -692,7 +704,7 @@ function detalle(p, pestana, cat) {
     ${p.estado === "leyendo" ? progreso(p) : p.estado === "a_medias" ? aMedias(p) : ""}
     ${siguiente(p) && `<div class="next"><b>Siguiente paso</b>${siguiente(p, true)}</div>`}
     ${p.ejecucion ? `<details class="sec"${["fallida", "sin_avance"].includes(p.ejecucion.estado) ? " open" : ""} id="registro"><summary><span class="t">Registro de la última ejecución</span><span class="muted">${EJECUCION[p.ejecucion.estado]}</span></summary>
-      <div class="cuerpo"><pre class="log">${h(p.ejecucion.log)}</pre></div></details>` : ""}
+      <div class="cuerpo">${["fallida", "sin_avance"].includes(p.ejecucion.estado) ? enviarRegistro(p, p.ejecucion) : ""}<pre class="log">${h(p.ejecucion.log)}</pre></div></details>` : ""}
     <nav class="tabs">${tabs.map(([k, t]) => `<a href="#/${p.id}/${k}" ${k === pestana ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
     <section>${(vistas[pestana] || vistaFicha)(p, cat)}</section>`;
 }
