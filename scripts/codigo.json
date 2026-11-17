@@ -11,6 +11,7 @@
  ".codex",
  ".opencode",
  "config/categorias.json",
+ "config/deusto.json",
  "dashboard",
  "scripts"
 ]
