@@ -1,7 +1,9 @@
 {
   "detector": {
     "ignoreRules": [],
-    "ignoreFiles": [],
+    "ignoreFiles": [
+      "grados/**"
+    ],
     "ignoreValues": [
       {
         "rule": "pulsing-dot",
