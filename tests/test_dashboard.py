@@ -18,6 +18,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "dashboard"))
 import server  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import deusto  # noqa: E402
+
+# Un doble grado suma las asignaturas de cada grado que lo forma, del mismo campus si lo hay; lo que no es grado no suma.
+dobles = {"14402": {"nombre": "Grado en Informática", "asignaturas": {"1": "Bilbao"}},
+          "24402": {"nombre": "Grado en Informática", "asignaturas": {"2": "Donostia"}},
+          "14314": {"nombre": "Grado en FPE (2018)", "asignaturas": {"3": "FPE"}},
+          "24204": {"nombre": "Grado en ADE + Grado en Informática", "asignaturas": {"9": "propia"}},
+          "14014": {"nombre": "Grado en Informática + Grado en FPE + Programa en Videojuegos", "asignaturas": {}},
+          "24810": {"nombre": "Grado en Informática + Grado en Infantil", "asignaturas": {}}}
+assert deusto.completar_dobles(dobles) == ["24204 Grado en ADE", "24810 Grado en Infantil"]
+assert dobles["24204"]["asignaturas"] == {"2": "Donostia", "9": "propia"}, "el del mismo campus, sin perder las propias"
+assert dobles["14014"]["asignaturas"] == {"1": "Bilbao", "3": "FPE"}, "el año del plan no impide casar el nombre"
+assert dobles["24810"]["asignaturas"] == {"2": "Donostia"} and dobles["14402"]["asignaturas"] == {"1": "Bilbao"}
+
 
 def falla(f, *args):
     try:
