@@ -7,6 +7,7 @@ import re
 import shlex
 import shutil
 import signal
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,10 @@ PFGS = RAIZ / "pfgs"
 GRADOS = RAIZ / "grados"
 CATEGORIAS = RAIZ / "config" / "categorias.json"
 CONFIG_EJECUCION = RAIZ / "config" / "ejecucion.json"
+DEUSTO = RAIZ / "config" / "deusto.json"  # lo rehace scripts/deusto.py
+CAMPUS = {"1": "Bilbao", "2": "San Sebastián"}  # primera cifra del código de estudio; los centros adscritos van por su nombre
+GUIA_DEUSTO = ("https://gaude.deusto.es/doa/consultaPublica/look%5bconpub%5dMostrarPubGuiaDocAs"
+               "?entradaPublica=true&idiomaPais=es.ES&_anoAcademico={ano}&_codAsignatura={cod}")
 INDEX = Path(__file__).resolve().parent / "index.html"
 FUENTE = INDEX.parent / "fuentes" / "Geist-Variable.woff2"  # servida aquí: el dashboard no pide nada a internet
 MAX_SUBIDA = 100 * 1024 * 1024
@@ -784,7 +789,23 @@ class SoloHttp(urllib.request.HTTPRedirectHandler):
     http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
 
 
-DESCARGADOR = urllib.request.build_opener(SoloHttp)
+def contexto_tls():
+    """En macOS, el Python de uv usa /etc/ssl/cert.pem, sin raíces como HARICA 2021 (la de gaude.deusto.es):
+    se añaden las del llavero del sistema, las mismas que usan el navegador y curl."""
+    ctx = ssl.create_default_context()
+    if sys.platform == "darwin":
+        try:
+            pem = subprocess.run(["security", "find-certificate", "-a", "-p",
+                                  "/System/Library/Keychains/SystemRootCertificates.keychain"],
+                                 capture_output=True, text=True, timeout=10).stdout
+            if pem:
+                ctx.load_verify_locations(cadata=pem)
+        except (OSError, subprocess.SubprocessError, ssl.SSLError):
+            pass  # sin el llavero queda el almacén de siempre
+    return ctx
+
+
+DESCARGADOR = urllib.request.build_opener(SoloHttp, urllib.request.HTTPSHandler(context=contexto_tls()))
 
 
 def descargar_programa(g, url):
@@ -824,6 +845,22 @@ def descargar_cola():
             hecho = {"estado": "fallida", "error": str(e)}
         with CERROJO:
             x.update(hecho)
+
+
+def estudios_deusto():
+    cat = objeto(leer(DEUSTO))
+    return cat.get("ano"), objeto(cat.get("estudios"))
+
+
+def importar_deusto(codigo):
+    """Crea el grado con el nombre oficial y encola las guías de todas sus asignaturas."""
+    ano, estudios = estudios_deusto()
+    e = estudios.get(codigo) if isinstance(codigo, str) else None
+    if not isinstance(e, dict):
+        raise ValueError("esa titulación no está en el catálogo de Deusto")
+    g = crear_grado(e.get("nombre"))
+    encolar_urls(g, [GUIA_DEUSTO.format(ano=ano, cod=c) for c in objeto(e.get("asignaturas"))])
+    return g
 
 
 def borrar_programa(g, s):
@@ -931,6 +968,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.responder(200, [resumen_grado(g) for g in gs])
         if g := self.grado(ruta, r"/api/grados/([a-z0-9-]+)"):
             return self.responder(200, detalle_grado(g))
+        if ruta == "/api/deusto":
+            ano, estudios = estudios_deusto()
+            return self.responder(200, {"ano": ano, "estudios": [
+                {"codigo": c, "nombre": e.get("nombre"), "campus": CAMPUS.get(c[:1]) or str(e.get("centro")).split(" (")[0], "asignaturas": len(objeto(e.get("asignaturas")))}
+                for c, e in estudios.items() if isinstance(e, dict)]})
         # Nunca como HTML: una página subida o descargada ejecutaría sus scripts con acceso a la API del dashboard.
         if (g := self.grado(ruta, r"/grados/([a-z0-9-]+)/programas/([a-z0-9-]+\.(?:pdf|txt|html))")) \
                 and (f := g / "programas" / ruta.rsplit("/", 1)[1]).exists():
@@ -984,7 +1026,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.responder(200, {"ok": True})
             if url.path == "/api/grados":
                 raw = self.cuerpo_json()
-                return self.responder(201, {"id": crear_grado(raw.get("nombre") if isinstance(raw, dict) else None).name})
+                raw = raw if isinstance(raw, dict) else {}
+                return self.responder(201, {"id": (importar_deusto(raw["deusto"]) if "deusto" in raw else crear_grado(raw.get("nombre"))).name})
             if g := self.grado(url.path, r"/api/grados/([a-z0-9-]+)/programas"):
                 n = int(self.headers.get("Content-Length") or 0)
                 if not 0 < n <= MAX_PROGRAMA:

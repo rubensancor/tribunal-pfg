@@ -623,6 +623,21 @@ elif "preguntas-pfg" in prompt:
     assert not g.exists(), "la descarga en curso no recrea el grado"
     assert pedidas.count("/guia.pdf") == pdfs, "las que esperaban ni se piden"
     assert json.loads(pedir("/api/grados")[1]) == [] and server.resumen(d)["paso"] is None
+
+    # Importar de Deusto: el grado toma el nombre oficial y encola la guía de cada asignatura del catálogo.
+    server.DEUSTO, server.GUIA_DEUSTO = tmp / "deusto.json", f"{web}/guia?_anoAcademico={{ano}}&_codAsignatura={{cod}}"
+    server.escribir(server.DEUSTO, {"ano": 2026, "estudios": {"14402": {"nombre": "Grado en Ingeniería Informática",
+                    "centro": "Facultad de Ingeniería", "asignaturas": {"145320": "Arquitectura", "145329": "Sistemas Operativos"}}}})
+    assert json.loads(pedir("/api/deusto")[1]) == {"ano": 2026, "estudios": [{"codigo": "14402",
+        "nombre": "Grado en Ingeniería Informática", "campus": "Bilbao", "asignaturas": 2}]}
+    assert "no está en el catálogo" in json.loads(pedir("/api/grados", {"deusto": "99999"})[1])["error"]
+    codigo, cuerpo = pedir("/api/grados", {"deusto": "14402"})
+    gd = server.GRADOS / json.loads(cuerpo)["id"]
+    assert codigo == 201 and server.leer(gd / "grado.json")["nombre"] == "Grado en Ingeniería Informática"
+    ds, _ = descargas(gd.name)
+    assert [(x["estado"], x.get("slug")) for x in ds] == [("hecha", "145320"), ("hecha", "145329")], ds
+    assert ds[0]["url"].endswith("?_anoAcademico=2026&_codAsignatura=145320")
+    assert "ya hay un grado" in json.loads(pedir("/api/grados", {"deusto": "14402"})[1])["error"]
     guias.shutdown()
     srv.shutdown()
 

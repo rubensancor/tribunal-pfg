@@ -233,7 +233,7 @@ form.ajustes .btn { margin-top: 16px; }
 .bloque.mas-alla h3::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-radius: 50%; background: var(--accent); vertical-align: 2px; }
 .linea-grado { margin: 0 0 16px; }
 .linea-grado b { color: var(--ink); font-weight: 500; }
-.card input, .anadir input, .anadir textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--panel); color: var(--ink); width: 100%; }
+.card input, .card select, .anadir input, .anadir textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--panel); color: var(--ink); width: 100%; }
 .anadir { display: grid; gap: 14px; margin-bottom: 16px; }
 .anadir h3 { margin: 0; }
 .anadir-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -796,8 +796,15 @@ function vistaGrados(gs) {
       <form class="card nuevo-grado" id="nuevo-grado"><h2><label for="nombre-grado">Nuevo grado</label></h2>
         <input id="nombre-grado" data-conservar required maxlength="200" placeholder="Grado en Ingeniería Informática" autocomplete="off">
         <span class="muted">El nombre exacto de la titulación, como aparece en la portada de las memorias.</span>
-        <div class="abajo"><button class="btn primary" type="submit">Crear grado</button></div></form></div>`;
+        <div class="abajo"><button class="btn primary" type="submit">Crear grado</button></div></form>
+      ${deusto?.estudios?.length ? `<form class="card nuevo-grado" id="importar-deusto"><h2><label for="estudio-deusto">Importar de Deusto</label></h2>
+        <select id="estudio-deusto" data-conservar required><option value="">Elige la titulación</option>${deusto.estudios
+          .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, "es") || a.codigo.localeCompare(b.codigo))
+          .map(e => `<option value="${h(e.codigo)}">${h(e.nombre)} · ${h(e.campus)} (${e.asignaturas} asignaturas)</option>`).join("")}</select>
+        <span class="muted">Crea el grado y descarga de la web de la universidad las guías docentes de todas sus asignaturas, curso ${deusto.ano}/${String(deusto.ano + 1).slice(2)}.</span>
+        <div class="abajo"><button class="btn primary" type="submit">Importar</button></div></form>` : ""}</div>`;
 }
+let deusto = null;  // catálogo de config/deusto.json: se pide una vez
 
 let rapido = false;  // hay URL en cola o descargando: se repinta cada segundo
 const ESTADO_URL = {en_cola: () => "En cola", descargando: () => "Descargando…",
@@ -933,6 +940,7 @@ async function cargar() {
   const ajustes = location.hash === "#ajustes", grados = location.hash.match(/^#grados(?:\/([a-z0-9-]+))?$/);
   const [, id, pestana = "ficha", cat] = location.hash.match(/^#\/([a-z0-9-]+)(?:\/(\w+))?(?:\/([a-z0-9-]+))?/) || [];
   let r, txt;
+  if (grados && !grados[1]) deusto ??= await fetch("/api/deusto").then(x => x.json()).catch(() => null);
   try { r = await fetch(ajustes ? "/api/config" : grados ? `/api/grados${grados[1] ? "/" + grados[1] : ""}` : id ? `/api/pfgs/${id}` : "/api/pfgs"); txt = await r.text(); }
   catch { return aviso("No se puede conectar con el servidor del dashboard."); }
   if (location.hash + txt === pintado) return;
@@ -1203,12 +1211,13 @@ document.addEventListener("input", e => {  // los niveles de esfuerzo dependen d
 });
 document.addEventListener("submit", async e => {
   const gid = gradoActual();
-  if (e.target.id === "nuevo-grado") {
+  if (e.target.id === "nuevo-grado" || e.target.id === "importar-deusto") {
     e.preventDefault();
-    const r = await fetch("/api/grados", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nombre: $("#nombre-grado").value})}).catch(() => null);
+    const cuerpo = e.target.id === "nuevo-grado" ? {nombre: $("#nombre-grado").value} : {deusto: $("#estudio-deusto").value};
+    const r = await fetch("/api/grados", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(cuerpo)}).catch(() => null);
     const res = await r?.json().catch(() => ({}));
     if (!r?.ok) return aviso(res?.error || "No se ha podido crear el grado.");
-    $("#nombre-grado").value = "";
+    e.target.reset();
     location.hash = `#grados/${res.id}`;
     return;
   }
