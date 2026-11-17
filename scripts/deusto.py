@@ -6,6 +6,7 @@ Pide de una en una y con pausa: no saturar el servidor de la universidad.
 """
 import datetime
 import json
+import re
 import sys
 import time
 import urllib.parse
@@ -31,6 +32,33 @@ def sin_codigo(texto):
     return texto.split(" - ", 1)[-1].strip()  # gaude antepone el código: «14402 - Grado en …»
 
 
+def simple(nombre):
+    return re.sub(r"\s*\(\d{4}\)$", "", nombre)  # «Grado en Filosofía, Política y Economía (2018)»: el año del plan sobra
+
+
+def completar_dobles(estudios):
+    """gaude da a cada doble grado solo parte de sus asignaturas: le suma las de cada «Grado en …» que lo forma,
+    las del mismo campus (primera cifra del código) si existe ahí y si no las del otro. Devuelve los que no encuentra."""
+    simples = {}
+    for c, e in sorted(estudios.items()):
+        if " + " not in e["nombre"]:
+            simples.setdefault(simple(e["nombre"]), []).append(c)
+    faltan = []
+    for c, e in estudios.items():
+        if " + " not in e["nombre"]:
+            continue
+        for parte in e["nombre"].split(" + "):
+            if not parte.startswith("Grado"):
+                continue  # «+ Programa en …», «+ Diploma …»: no es un grado
+            cs = simples.get(simple(parte))
+            if not cs:
+                faltan.append(f"{c} {parte}")
+                continue
+            origen = next((x for x in cs if x[0] == c[0]), cs[0])
+            e["asignaturas"] = dict(sorted((estudios[origen]["asignaturas"] | e["asignaturas"]).items()))
+    return faltan
+
+
 def main():
     hoy = datetime.date.today()
     ano = int(sys.argv[1]) if len(sys.argv) > 1 else hoy.year - (hoy.month < 9)
@@ -51,6 +79,8 @@ def main():
                                      "asignaturas": dict(sorted(asignaturas.items()))}
                 print(f"{estudio} {sin_codigo(nombre)}: {len(asignaturas)} asignaturas", file=sys.stderr)
     assert estudios, "gaude no ha devuelto ningún grado: ¿ha cambiado la consulta pública?"
+    for falta in completar_dobles(estudios):
+        print(f"doble grado sin su grado simple en el catálogo: {falta}", file=sys.stderr)
     SALIDA.write_text(json.dumps({"ano": ano, "estudios": estudios}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"{len(estudios)} grados en {SALIDA}", file=sys.stderr)
 
