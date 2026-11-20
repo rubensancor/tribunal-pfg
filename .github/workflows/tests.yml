@@ -18,3 +18,4 @@ jobs:
       - run: uv run tests/test_pfg.py
       - run: uv run tests/test_instalar.py
       - run: uv run tests/test_dashboard.py
+      - run: uv run tests/test_e2e.py
