@@ -77,13 +77,16 @@ def agente_falso(ruta, codigo):
     return str(ruta)
 
 
-assert server.validar_config({}) == {f: {"harness": "claude", "modelo": "", "esfuerzo": ""} for f in server.FASES}
-assert server.validar_config({"leer-pfg": {"harness": "pi", "modelo": "openai-codex/gpt-6-luna"}})["leer-pfg"]["harness"] == "pi"
-assert "harness desconocido" in falla(server.validar_config, {"leer-pfg": {"harness": "bash"}})
+assert server.validar_config({}) == {"todos_los_harnesses": False, **{f: {"harness": "agy", "modelo": "", "esfuerzo": ""} for f in server.FASES}}
+# Sin el interruptor, solo agy: las fases con otro harness (las de antes de 0.2.7, o al apagarlo) pasan a agy.
+assert server.validar_config({"leer-pfg": {"harness": "claude", "modelo": "opus", "esfuerzo": "max"}})["leer-pfg"] == {"harness": "agy", "modelo": "", "esfuerzo": ""}
+assert server.validar_config({"todos_los_harnesses": "sí", "leer-pfg": {"harness": "pi"}})["leer-pfg"]["harness"] == "agy"
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "pi", "modelo": "openai-codex/gpt-6-luna"}})["leer-pfg"]["harness"] == "pi"
+assert "harness desconocido" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "bash"}})
 assert "modelo no válido" in falla(server.validar_config, {"leer-pfg": {"modelo": "--dangerously-skip-permissions"}})
 assert "modelo no válido" in falla(server.validar_config, {"leer-pfg": {"modelo": "opus; rm -rf /"}})
-assert server.validar_config({"leer-pfg": {"harness": "pi", "esfuerzo": "minimal"}})["leer-pfg"]["esfuerzo"] == "minimal"
-assert "Claude Code no admite el esfuerzo 'minimal'" in falla(server.validar_config, {"leer-pfg": {"esfuerzo": "minimal"}})
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "pi", "esfuerzo": "minimal"}})["leer-pfg"]["esfuerzo"] == "minimal"
+assert "Antigravity (agy) no admite el esfuerzo 'minimal'" in falla(server.validar_config, {"leer-pfg": {"esfuerzo": "minimal"}})
 assert server.validar_config({"leer-pfg": {"harness": "agy", "esfuerzo": "high"}})["leer-pfg"]["esfuerzo"] == "high"
 assert "por defecto" in falla(server.validar_config, {"leer-pfg": {"harness": "agy", "esfuerzo": "max"}})
 assert "claude-opus-4-6-thinking" in falla(server.validar_config, {"leer-pfg": {"harness": "agy", "modelo": "claude-opus-4-6-thinking", "esfuerzo": "low"}})
@@ -106,13 +109,13 @@ assert argv[-3:-1] == ["-c", 'model_reasoning_effort="xhigh"']
 assert "solo puedes ejecutar" not in argv[-1] and ".agents/skills" in argv[-1], "Codex lee con la shell"
 assert server.HARNESSES["codex"]["env"] == {"UV_OFFLINE": "1"}
 assert not any("reasoning" in a for a in server.comando_agente("codex", "", "", "x")) and "--model" not in server.comando_agente("codex", "", "", "x")
-assert server.validar_config({"leer-pfg": {"harness": "codex", "modelo": "gpt-5.6-terra", "esfuerzo": "ultra"}})["leer-pfg"]["esfuerzo"] == "ultra"
-assert "no admite el esfuerzo" in falla(server.validar_config, {"leer-pfg": {"harness": "codex", "esfuerzo": "ultra"}})
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "codex", "modelo": "gpt-5.6-terra", "esfuerzo": "ultra"}})["leer-pfg"]["esfuerzo"] == "ultra"
+assert "no admite el esfuerzo" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "codex", "esfuerzo": "ultra"}})
 
-assert server.validar_config({"leer-pfg": {"harness": "opencode", "modelo": "opencode/beam-free", "esfuerzo": "xhigh"}})["leer-pfg"]["esfuerzo"] == "xhigh"
-assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "opencode/big-pickle"}})
-assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "anthropic/claude-opus-5-5"}})
-assert "no admite el esfuerzo" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "esfuerzo": "medium"}})
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "modelo": "opencode/beam-free", "esfuerzo": "xhigh"}})["leer-pfg"]["esfuerzo"] == "xhigh"
+assert "solo admite" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "modelo": "opencode/big-pickle"}})
+assert "solo admite" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "modelo": "anthropic/claude-opus-5-5"}})
+assert "no admite el esfuerzo" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "esfuerzo": "medium"}})
 argv = server.comando_agente("opencode", "", "", "x")
 assert argv[:4] == ["opencode", "run", "--standalone", "--auto"] and argv[argv.index("-m") + 1] == "opencode/glm-5.3-flash-free"
 assert server.comando_agente("opencode", "opencode/beam-free", "low", "x")[-2] == "opencode/beam-free#low"
@@ -129,6 +132,7 @@ assert not server.origen_local("evil.example:8765", None, 8765), "DNS rebinding"
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
     server.PFGS, server.CONFIG_EJECUCION, server.GRADOS = tmp / "pfgs", tmp / "ejecucion.json", tmp / "grados"
+    server.CONFIG_EJECUCION.write_text(json.dumps({"todos_los_harnesses": True, **{f: {"harness": "claude"} for f in server.FASES}}))
     agente = tmp / "agente"
     server.HARNESSES["claude"]["bin"] = agente_falso(agente, '''
 if "salir-mal" in prompt:
@@ -408,7 +412,7 @@ print("codex-cli 9.1.0")
     assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] == "Añade el permiso."
     codigo, cuerpo = pedir("/api/config")
     c = json.loads(cuerpo)
-    assert codigo == 200 and set(c) == {"fases", "error", "sistema", "version", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
+    assert codigo == 200 and set(c) == {"fases", "todos", "error", "sistema", "version", "harnesses"} and c["todos"] and list(c["harnesses"]) == list(server.HARNESSES)
     assert c["sistema"] == {"id": server.SISTEMA, "nombre": server.SISTEMAS[server.SISTEMA]}
     assert server.SISTEMA == {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
     for k, v in c["harnesses"].items():

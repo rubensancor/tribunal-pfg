@@ -22,7 +22,7 @@ Si piden «actualiza», ejecuta `git pull --ff-only` y pide que reinicien el das
 4. Skill `preguntas-pfg`: escribe `preguntas.json` y después `clasificacion.json`. Tiene en cuenta las notas «Para las preguntas» de `anotaciones.json` y lo que va más allá del grado en `contraste.json`.
 5. Cuando quiera, el docente lee la memoria en el dashboard y anota. Skill `anotaciones-pfg`: responde las notas «Preguntar al agente» de `anotaciones.json` en `respuestas.json`.
 
-El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También puede lanzar las skills en modo no interactivo con el harness y el modelo que fije `config/ejecucion.json` (pantalla Ajustes). En ese caso nadie leerá tus preguntas: no pidas confirmación. Los JSON de `pfgs/` son el contrato con el dashboard: después de escribirlos, ejecuta `uv run scripts/pfg.py validar <id>`.
+El dashboard muestra lo que haya en `pfgs/<id>/` y el siguiente paso. También puede lanzar las skills en modo no interactivo con el harness y el modelo que fije `config/ejecucion.json` (pantalla Ajustes; solo agy salvo que el docente active `todos_los_harnesses`). En ese caso nadie leerá tus preguntas: no pidas confirmación. Los JSON de `pfgs/` son el contrato con el dashboard: después de escribirlos, ejecuta `uv run scripts/pfg.py validar <id>`.
 
 ## Reglas
 

@@ -339,16 +339,23 @@ def niveles(harness, modelo):
     return h["modelos"].get(modelo, h["esfuerzos"])
 
 
+TODOS = "todos_los_harnesses"  # sin él, en Ajustes solo se ve Antigravity
+
+
 def validar_config(raw):
-    """{fase: {harness, modelo, esfuerzo}} completo; ValueError con el motivo si algo no vale."""
+    """{fase: {harness, modelo, esfuerzo}, TODOS: bool} completo; ValueError con el motivo si algo no vale.
+    Sin TODOS, las fases con otro harness pasan a agy con su modelo y su esfuerzo por defecto: así se migran
+    los ejecucion.json de antes del interruptor y se apaga el interruptor."""
     if not isinstance(raw, dict):
         raise ValueError("se esperaba un objeto {fase: {harness, modelo, esfuerzo}}")
-    cfg = {}
+    cfg = {TODOS: raw.get(TODOS) is True}
     for fase in FASES:
         v = raw.get(fase) or {}
         if not isinstance(v, dict):
             raise ValueError(f"{fase}: se esperaba un objeto")
-        harness, modelo, esfuerzo = v.get("harness", "claude"), v.get("modelo", ""), v.get("esfuerzo", "")
+        harness, modelo, esfuerzo = v.get("harness", "agy"), v.get("modelo", ""), v.get("esfuerzo", "")
+        if not cfg[TODOS] and harness != "agy":
+            harness, modelo, esfuerzo = "agy", "", ""
         if harness not in HARNESSES:
             raise ValueError(f"{fase}: harness desconocido {harness!r}")
         if not isinstance(modelo, str) or not MODELO.fullmatch(modelo):
@@ -528,7 +535,8 @@ def vista_config(forzar=False):
         error = f"{CONFIG_EJECUCION.name} no es válido y se usan los valores por defecto: {e}"
     estados = detectar(forzar)
     so = "windows" if SISTEMA == "windows" else "unix"
-    return {"fases": {f: {"nombre": FASES[f], **c} for f, c in config_ejecucion().items()}, "error": error,
+    cfg = config_ejecucion()
+    return {"fases": {f: {"nombre": FASES[f], **cfg[f]} for f in FASES}, "todos": cfg[TODOS], "error": error,
             "sistema": {"id": SISTEMA, "nombre": SISTEMAS[SISTEMA]}, "version": estado_version(),
             "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "esfuerzos": h["esfuerzos"], "nota": h["nota"],
                               "instalar": {"comando": h["instalar"][so], "url": h["instalar"]["url"]}, **estados[k]}

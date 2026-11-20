@@ -208,6 +208,8 @@ form.ajustes :is(select, input):hover:not(:disabled) { border-color: var(--muted
 form.ajustes select:disabled { cursor: not-allowed; color: var(--muted); background-color: var(--bg); }
 form.ajustes td { vertical-align: middle; }
 form.ajustes .btn { margin-top: 16px; }
+form.ajustes .todos-harnesses { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+form.ajustes .todos-harnesses input { width: auto; height: auto; }
 /* Harnesses: el estado en tinta con un punto, como los bloques bien/flojo de la ficha. Sin instalar, el punto hueco. */
 .falta-harness { display: block; margin-top: 4px; font-size: 12px; color: var(--warn); }
 .falta-harness:empty { display: none; }
@@ -881,7 +883,8 @@ function vistaPreguntas(p, cat) {
 }
 
 // ---------- carga y refresco ----------
-let harnesses = {};
+let harnesses = {}, todos = false;
+const visibles = () => todos ? Object.entries(harnesses) : [["agy", harnesses.agy]];  // sin el interruptor, solo Antigravity
 const niveles = (hk, modelo) => harnesses[hk].modelos[modelo] ?? harnesses[hk].esfuerzos;
 const opcionesEsfuerzo = (lista, actual) => (lista.length ? [["", "el del harness"], ...lista.map(n => [n, n])]
   : [["", "este modelo no lo admite"]]).map(([v, t]) => `<option value="${h(v)}"${v === actual ? " selected" : ""}>${h(t)}</option>`).join("");
@@ -915,25 +918,29 @@ function vistaVersion(v) {
 function vistaAjustes(c) {
   harnesses = c.harnesses;
   sistema = c.sistema;
+  todos = c.todos;
+  const falta = k => `<span class="falta-harness" id="falta-${k}">${h(faltaHarness(c.fases[k].harness))}</span>`;
   const fila = ([k, f]) => `<tr><td>${h(f.nombre)}</td>
-    <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" aria-describedby="falta-${k}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
+    ${todos ? `<td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" aria-describedby="falta-${k}" data-modelo="${k}">${visibles().map(([hk, hv]) =>
       `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}${hv.estado === "no_instalado" ? " (no instalado)" : ""}</option>`).join("")}</select>
-      <span class="falta-harness" id="falta-${k}">${h(faltaHarness(f.harness))}</span></td>
-    <td><input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off" data-fase="${k}"></td>
+      ${falta(k)}</td>` : ""}
+    <td>${todos ? "" : `<input type="hidden" name="${k}.harness" value="agy">`}<input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off" data-fase="${k}"${todos ? "" : ` aria-describedby="falta-${k}"`}>
+      ${todos ? "" : falta(k)}</td>
     <td><select name="${k}.esfuerzo" aria-label="Esfuerzo de ${h(f.nombre)}"${niveles(f.harness, f.modelo).length ? "" : " disabled"}>${
       opcionesEsfuerzo(niveles(f.harness, f.modelo), f.esfuerzo)}</select></td></tr>`;
   return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav><h1>Ajustes</h1>
-    <p class="muted">Qué harness, qué modelo y con cuánto esfuerzo de razonamiento se ejecuta cada fase al pulsar «Ejecutar». Sin modelo o sin esfuerzo, se usa el que tenga configurado el harness.
+    <p class="muted">${todos ? "Qué harness, qué modelo" : "Qué modelo de Antigravity"} y con cuánto esfuerzo de razonamiento se ejecuta cada fase al pulsar «Ejecutar». Sin modelo o sin esfuerzo, se usa el que tenga configurado ${todos ? "el harness" : "Antigravity"}.
       El contenido de las memorias llega al proveedor del modelo: usa la herramienta de IA que autorice tu universidad.</p>
     ${c.error ? error(c.error) : ""}
     <div class="bloque" id="version" style="margin-bottom:16px">${vistaVersion(c.version)}</div>
-    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th><th>Harness</th><th>Modelo</th><th>Esfuerzo</th></tr></thead>
+    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th>${todos ? "<th>Harness</th>" : ""}<th>Modelo</th><th>Esfuerzo</th></tr></thead>
       <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
-      ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
+      <label class="todos-harnesses"><input type="checkbox" name="todos_los_harnesses"${todos ? " checked" : ""}> Mostrar todos los harnesses (Claude Code, Codex, Pi, OpenCode)</label>
+      ${visibles().map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
       <button class="btn primary" type="submit">Guardar</button></form>
-    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>Harnesses en este ordenador (${h(c.sistema.nombre)})</h3>
+    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>${todos ? "Harnesses" : "Antigravity"} en este ordenador (${h(c.sistema.nombre)})</h3>
       <button class="btn" type="button" data-detectar>Comprobar de nuevo</button></div>
-      <ul class="harnesses">${Object.entries(c.harnesses).map(vistaHarness).join("")}</ul></div>`;
+      <ul class="harnesses">${visibles().map(vistaHarness).join("")}</ul></div>`;
 }
 
 async function cargar() {
@@ -1109,9 +1116,9 @@ document.addEventListener("click", async e => {
       pintado = location.hash + txt;  // el latido no repinta lo mismo encima
       harnesses = JSON.parse(txt).harnesses;
       $("#version").innerHTML = vistaVersion(JSON.parse(txt).version);
-      $("#main .harnesses").innerHTML = Object.entries(harnesses).map(vistaHarness).join("");
-      document.querySelectorAll('#ajustes select[name$=".harness"]').forEach(s => {
-        [...s.options].forEach(o => o.textContent = harnesses[o.value].nombre + (harnesses[o.value].estado === "no_instalado" ? " (no instalado)" : ""));
+      $("#main .harnesses").innerHTML = visibles().map(vistaHarness).join("");
+      document.querySelectorAll('#ajustes [name$=".harness"]').forEach(s => {
+        [...s.options || []].forEach(o => o.textContent = harnesses[o.value].nombre + (harnesses[o.value].estado === "no_instalado" ? " (no instalado)" : ""));
         $(`#falta-${s.name.split(".")[0]}`).textContent = faltaHarness(s.value);
       });
       aviso("Harnesses y versión comprobados.");
@@ -1196,6 +1203,9 @@ document.addEventListener("change", e => {
   e.target.checked ? seleccion.add(id) : seleccion.delete(id);
   repintarSeleccion();
 });
+document.addEventListener("change", e => {  // el interruptor guarda al momento: así aparece o desaparece la columna Harness
+  if (e.target.name === "todos_los_harnesses") e.target.form.requestSubmit();
+});
 document.addEventListener("input", e => {  // los niveles de esfuerzo dependen del harness y del modelo
   const k = e.target.dataset.modelo || e.target.dataset.fase;
   if (!k) return;
@@ -1245,9 +1255,15 @@ document.addEventListener("submit", async e => {
   const cfg = {};
   for (const [campo, valor] of new FormData(e.target)) {
     const [fase, clave] = campo.split(".");
-    (cfg[fase] ??= {})[clave] = valor.trim();
+    if (clave) (cfg[fase] ??= {})[clave] = valor.trim();
   }
-  if (await post("/api/config", cfg)) { aviso("Ajustes guardados."); pintado = ""; cargar(); }
+  cfg.todos_los_harnesses = e.target.elements.todos_los_harnesses.checked;
+  // Al apagar el interruptor, el servidor pasa a agy las fases con otro harness.
+  const aAgy = !cfg.todos_los_harnesses && Object.values(cfg).some(f => f.harness && f.harness !== "agy");
+  if (await post("/api/config", cfg)) {
+    aviso(aAgy ? "Ajustes guardados. Las fases con otro harness usan ahora Antigravity." : "Ajustes guardados.");
+    pintado = ""; cargar();
+  }
 });
 let arrastres = 0;
 addEventListener("dragenter", e => {
