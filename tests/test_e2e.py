@@ -97,7 +97,7 @@ def puerto_libre():
         return s.getsockname()[1]
 
 
-with tempfile.TemporaryDirectory() as tmp:
+with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:  # Windows: el error de verdad, no el del borrado
     tmp = Path(tmp)
     raiz = tmp / "Tribunal PFG"  # con espacio, como Documentos/Tribunal PFG
     instalar.instalar(RAIZ, raiz)

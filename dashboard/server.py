@@ -69,7 +69,7 @@ def opcion(flag, valor):
 def perfil_codex():
     """Perfil de permisos de Codex: el sandbox de :workspace (proyecto, sin red), más la caché de uv, que uv run
     necesita, y sin las notas personales. Es una regla del sandbox: cubre la shell, archivos nuevos, renombrados y enlaces."""
-    uv = subprocess.run(["uv", "cache", "dir"], capture_output=True, text=True).stdout.strip() or str(Path.home() / ".cache" / "uv")
+    uv = subprocess.run(["uv", "cache", "dir"], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip() or str(Path.home() / ".cache" / "uv")
     fs = "{" + f'":project_roots"={{{json.dumps("**/" + TIPOS["personal"])}="deny"}},{json.dumps(uv)}="write"' + "}"
     return ["-c", 'default_permissions="tribunal"', "-c", 'permissions.tribunal.extends=":workspace"',
             "-c", f"permissions.tribunal.filesystem={fs}"]
@@ -213,7 +213,9 @@ def generado(d, nombre):
         m = PAGINA.fullmatch(nombre)
         cmd = ["imagen", d.name, str(int(m[1]))] if m[1] else ["paginas", d.name]
         try:
-            subprocess.run(["uv", "run", str(RAIZ / "scripts" / "pfg.py"), *cmd], cwd=RAIZ, capture_output=True, timeout=60)
+            # stdin=DEVNULL: en la app el stdin es un pipe que lee otro hilo, y en Windows heredarlo cuelga al hijo
+            subprocess.run(["uv", "run", str(RAIZ / "scripts" / "pfg.py"), *cmd], cwd=RAIZ, capture_output=True, timeout=60,
+                           stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return None
     return ruta if ruta.exists() else None
@@ -799,7 +801,7 @@ def borrar(d):
 def matar_arbol(proc):
     """El proceso y lo que haya lanzado. En POSIX, proc tiene que ir en su propio grupo (start_new_session)."""
     if os.name == "nt":  # sin grupos de procesos: taskkill /T baja el árbol
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, stdin=subprocess.DEVNULL)
         return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
