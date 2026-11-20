@@ -444,6 +444,72 @@ print("codex-cli 9.1.0")
     server.os.environ["PATH"] = path
     server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"] = claude_bin, requisito
 
+    # Onboarding de agy con un agy falso. «agy models» solo responde con sesión; «authenticate» por ACP la abre,
+    # salvo que exista «rechazar». El instalador falso lo copia en una carpeta del PATH, como el oficial.
+    config, argv_instalar = server.CONFIG_EJECUCION.read_text(), server.argv_instalar
+    sesion, rechazar, vacia = tmp / "sesion-agy", tmp / "rechazar", tmp / "path-agy"
+    vacia.mkdir()
+    (tmp / "agy-src").mkdir()
+    agy = agente_falso(tmp / "agy-src" / "agy", f'''
+import json
+ses, rechazar = Path({str(sesion)!r}), Path({str(rechazar)!r})
+if sys.argv[1:] == ["models"]:
+    print("gemini-3.8-flash" if ses.exists() else "Not signed in")
+    sys.exit(0 if ses.exists() else 1)
+for linea in sys.stdin:  # agy acp
+    m = json.loads(linea)
+    print("ruido que no es JSON", flush=True)
+    if m["method"] == "authenticate":
+        print("Abre https://accounts.google.com/o/oauth2/auth?x=1 para iniciar sesión", file=sys.stderr, flush=True)
+        if rechazar.exists():
+            print(json.dumps({{"jsonrpc": "2.0", "id": m["id"], "error": {{"code": 1, "message": "cuenta no válida"}}}}), flush=True)
+            continue
+        ses.write_text("ok")
+    print(json.dumps({{"jsonrpc": "2.0", "id": m["id"], "result": {{}}}}), flush=True)
+''')
+
+    def terminar(nombre):
+        for _ in range(100):
+            if (t := server.estado_onboarding()[nombre]) and t["estado"] != "en_curso":
+                return t
+            time.sleep(0.1)
+        raise AssertionError(f"{nombre} no termina")
+
+    server.os.environ["PATH"] = str(vacia)
+    server.CONFIG_EJECUCION.write_text(json.dumps({"todos_los_harnesses": True}))
+    assert server.estado_onboarding(forzar=True)["paso"] == "listo", "con todos los harnesses no hay onboarding"
+    server.CONFIG_EJECUCION.write_text("{}")
+    codigo, cuerpo = pedir("/api/onboarding")
+    o = json.loads(cuerpo)
+    assert codigo == 200 and o["paso"] == "instalar" and o["instalar"] is None and o["url"].startswith("https://")
+    assert o["comando"] == server.HARNESSES["agy"]["instalar"]["windows" if server.SISTEMA == "windows" else "unix"]
+    assert server.argv_instalar()[-1].endswith(o["comando"]), "se ejecuta el mismo comando que se enseña"
+    server.argv_instalar = lambda: [sys.executable, "-c", "print('sin red'); raise SystemExit(7)"]
+    assert pedir("/api/onboarding/instalar", {})[0] == 202
+    t = terminar("instalar")
+    assert t["estado"] == "error" and "código 7" in t["error"] and "sin red" in t["log"], t
+    server.argv_instalar = lambda: [sys.executable, "-c", f"import shutil; shutil.copy({agy!r}, {str(vacia)!r})"]
+    assert pedir("/api/onboarding/instalar", {})[0] == 202
+    assert terminar("instalar")["estado"] == "ok"
+    assert pedir("/api/onboarding/instalar", {})[0] == 409, "ya está instalado"
+    o = server.estado_onboarding()
+    assert o["paso"] == "sesion" and "Not signed in" in o["sin_sesion"], o
+    rechazar.write_text("")
+    assert pedir("/api/onboarding/sesion", {})[0] == 202
+    t = terminar("sesion")
+    assert t["estado"] == "error" and t["error"] == "cuenta no válida" and server.estado_onboarding()["paso"] == "sesion", t
+    rechazar.unlink()
+    assert pedir("/api/onboarding/sesion", {})[0] == 202
+    t = terminar("sesion")
+    assert t["estado"] == "ok" and t["enlace"] == "https://accounts.google.com/o/oauth2/auth?x=1", t
+    assert server.estado_onboarding()["paso"] == "listo", "tras iniciar sesión se vuelve a comprobar"
+    sesion.unlink()
+    assert server.estado_onboarding()["paso"] == "listo", "la sesión se recuerda"
+    assert server.estado_onboarding(forzar=True)["paso"] == "sesion", "«Comprobar de nuevo» la vuelve a mirar"
+    server.os.environ["PATH"], server.argv_instalar = path, argv_instalar
+    server.CONFIG_EJECUCION.write_text(config)
+    server.AGY.update(instalar=None, sesion=None, con_sesion=None)
+
     # Programas del grado. Las guías se descargan de un servidor local, no de internet. La de Deusto tarda 2 s.
     simultaneas, pedidas = {"ahora": 0, "max": 0}, []
     contar = threading.Lock()

@@ -35,7 +35,7 @@ La primera vez tarda un minuto, mientras descarga Python y pymupdf. Tus memorias
 
 ### Instala un agente
 
-Las skills necesitan un agente, que aquí llamamos harness. El dashboard usa [Antigravity](https://antigravity.google/docs/getting-started?tab=cli). Para instalarlo:
+Las skills necesitan un agente, que aquí llamamos harness. El dashboard usa [Antigravity](https://antigravity.google/docs/getting-started?tab=cli). Mientras no esté listo, el dashboard te guía al abrirse: **Instalar Antigravity** ejecuta el instalador oficial e **Iniciar sesión con Google** abre el navegador. Usa una cuenta personal de Google: las de Google Workspace no incluyen Antigravity. Con **Configurar después** puedes leer y anotar memorias sin agente. Para instalarlo a mano:
 
 - macOS y Linux: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - Windows (PowerShell): `irm https://antigravity.google/cli/install.ps1 | iex`

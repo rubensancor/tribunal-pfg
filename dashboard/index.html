@@ -208,6 +208,18 @@ form.ajustes :is(select, input):hover:not(:disabled) { border-color: var(--muted
 form.ajustes select:disabled { cursor: not-allowed; color: var(--muted); background-color: var(--bg); }
 form.ajustes td { vertical-align: middle; }
 form.ajustes .btn { margin-top: 16px; }
+.pasos-ob { list-style: none; margin: 16px 0; display: grid; gap: 0; }
+.paso-ob { display: grid; gap: 8px; padding: 14px 0; border-top: 1px solid var(--rule); }
+.paso-ob:first-child { border-top: 0; padding-top: 0; }
+.paso-ob:last-child { padding-bottom: 0; }
+.paso-ob .cab { display: flex; align-items: center; gap: 10px; }
+.paso-ob .num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--control); font-size: 13px; }
+.paso-ob.hecho .num { background: var(--ok-soft); border-color: var(--ok-soft); color: var(--ok); }
+.paso-ob.pendiente { color: var(--muted); }
+.paso-ob p { margin: 0; max-width: 70ch; }
+.log-ob { max-height: 180px; overflow: auto; margin: 0; padding: 8px 10px; background: var(--bg); border-radius: var(--radius-control); font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.acciones-ob { display: flex; flex-wrap: wrap; gap: 8px; }
+body[data-vista="onboarding"] :is(.top .nav, .top .acciones label, #cargar) { visibility: hidden; }  /* hasta que agy esté listo o se aparte */
 form.ajustes .todos-harnesses { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
 form.ajustes .todos-harnesses input { width: auto; height: auto; }
 /* Harnesses: el estado en tinta con un punto, como los bloques bien/flojo de la ficha. Sin instalar, el punto hueco. */
@@ -943,7 +955,55 @@ function vistaAjustes(c) {
       <ul class="harnesses">${visibles().map(vistaHarness).join("")}</ul></div>`;
 }
 
+// ---------- onboarding de Antigravity ----------
+// Mientras agy no esté listo, el dashboard enseña solo esto. «Configurar después» lo aparta hasta la próxima vez.
+let agyListo = false;
+const omitido = () => { try { return sessionStorage.onboarding === "omitido"; } catch { return false; } };
+function vistaOnboarding(o) {
+  const paso = (n, titulo, estado, cuerpo) => `<li class="paso-ob ${estado}"><div class="cab"><span class="num">${estado === "hecho" ? "✓" : n}</span><b>${titulo}</b></div>${estado === "actual" ? cuerpo : ""}</li>`;
+  const ti = o.instalar, ts = o.sesion, instalando = ti?.estado === "en_curso", iniciando = ts?.estado === "en_curso";
+  const manual = `<p>Para instalarlo a mano en ${h(o.sistema)}, ejecuta en ${o.sistema === "Windows" ? "PowerShell" : "un terminal"}:</p>${comando(o.comando)}
+    <p class="muted">Instrucciones oficiales: ${enlaceExterno(o.url, urlCorta(o.url))}. Después, pulsa «Comprobar de nuevo».</p>`;
+  const instalar = instalando
+    ? `<p>Instalando Antigravity…</p>${ti.log ? `<pre class="log-ob">${h(ti.log)}</pre>` : ""}`
+    : `${ti?.estado === "error" ? `${error("No se ha podido instalar: " + ti.error + ".")}${ti.log ? `<pre class="log-ob">${h(ti.log)}</pre>` : ""}${manual}` : ""}
+      <p><button class="btn primary" type="button" data-ob="instalar">${ti?.estado === "error" ? "Volver a intentarlo" : "Instalar Antigravity"}</button></p>
+      ${ti?.estado === "error" ? "" : `<p class="muted">Ejecuta el instalador oficial de Google (${enlaceExterno(o.url, urlCorta(o.url))}). No pide permisos de administrador.</p>`}`;
+  const sesion = iniciando
+    ? `<p>Se ha abierto el navegador: inicia sesión con tu cuenta de Google y vuelve aquí.</p>
+      ${ts.enlace ? `<p class="muted">Si no se ha abierto, ${enlaceExterno(ts.enlace, "abre este enlace")}.</p>` : ""}`
+    : `${ts?.estado === "error" ? error("No se ha podido iniciar sesión: " + ts.error + ".") : ""}
+      <p>Usa una cuenta personal de Google: las de Google Workspace, como muchas de universidad, no incluyen Antigravity.</p>
+      <p><button class="btn primary" type="button" data-ob="sesion">Iniciar sesión con Google</button></p>
+      ${ts?.estado === "error" ? `<p class="muted">También puedes abrir un terminal, escribir <code>agy</code>, iniciar sesión allí y pulsar «Comprobar de nuevo».</p>` : ""}`;
+  return `<h1>Prepara Antigravity</h1>
+    <p class="muted">Tribunal PFG usa Antigravity (agy), de Google, para leer las memorias y preparar las preguntas de la defensa.
+      El contenido de las memorias llega a Google: usa la herramienta de IA que autorice tu universidad.</p>
+    <ol class="bloque pasos-ob">
+      ${paso(1, "Instalar Antigravity", o.paso === "instalar" ? "actual" : "hecho", instalar)}
+      ${paso(2, "Iniciar sesión", o.paso === "sesion" ? "actual" : o.paso === "instalar" ? "pendiente" : "hecho", sesion)}
+    </ol>
+    <p class="acciones-ob"><button class="btn" type="button" data-ob="comprobar">Comprobar de nuevo</button>
+      <button class="btn" type="button" data-ob="despues">Configurar después</button></p>
+    <p class="muted">Sin Antigravity solo podrás leer y anotar las memorias.</p>`;
+}
+// true si ha pintado el onboarding y cargar() no debe seguir
+async function onboarding() {
+  if (agyListo || omitido()) return false;
+  let txt;
+  try { txt = await (await fetch("/api/onboarding")).text(); } catch { return false; }
+  const o = JSON.parse(txt);
+  if (o.paso === "listo") { agyListo = true; if (pintado.startsWith("onboarding")) { pintado = ""; aviso("Antigravity está listo."); } return false; }
+  rapido = o.instalar?.estado === "en_curso" || o.sesion?.estado === "en_curso";  // se sigue el avance cada segundo
+  if ("onboarding" + txt === pintado) return true;
+  pintado = "onboarding" + txt; hashPintado = "";
+  $("#main").innerHTML = vistaOnboarding(o);
+  document.body.dataset.vista = "onboarding";
+  return true;
+}
+
 async function cargar() {
+  if (await onboarding()) return;
   const ajustes = location.hash === "#ajustes", grados = location.hash.match(/^#grados(?:\/([a-z0-9-]+))?$/);
   const [, id, pestana = "ficha", cat] = location.hash.match(/^#\/([a-z0-9-]+)(?:\/(\w+))?(?:\/([a-z0-9-]+))?/) || [];
   let r, txt;
@@ -1105,6 +1165,18 @@ async function post(url, cuerpo) {
   } catch { aviso("No se puede conectar con el servidor del dashboard."); }
 }
 document.addEventListener("click", async e => {
+  const ob = e.target.closest("[data-ob]");
+  if (ob) {
+    if (ob.dataset.ob === "despues") {
+      try { sessionStorage.onboarding = "omitido"; } catch {}
+      aviso("Sin Antigravity solo puedes leer y anotar las memorias. Te lo volveremos a proponer al abrir Tribunal PFG.");
+    } else {
+      ob.disabled = true;
+      if (ob.dataset.ob === "comprobar") ob.textContent = "Comprobando…";
+      await post(`/api/onboarding/${ob.dataset.ob}`);
+    }
+    pintado = ""; return cargar();
+  }
   const detectar = e.target.closest("[data-detectar]");
   if (detectar) {
     detectar.disabled = true; detectar.textContent = "Comprobando…";
