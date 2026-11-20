@@ -60,20 +60,10 @@ REPO = "rubensancor/tribunal-pfg"
 GITHUB = "https://api.github.com"  # los tests lo apuntan a un servidor local
 APP = os.environ.get("TRIBUNAL_APP") == "1"  # lo lanza la app de escritorio (main.js), que pone la ventana
 REINICIO_APP = 75  # tras actualizar, la app vuelve a arrancar el servidor si sale con este código
-AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 
 def opcion(flag, valor):
     return [flag, valor] if valor else []
-
-
-def faltan_permisos_agy():
-    rutas = [AGY_SETTINGS, *(Path.home() / ".gemini" / "config" / "projects").glob("**/*.json")]
-    texto = "".join(p.read_text(errors="ignore") for p in rutas if p.is_file())
-    faltan = [c for c in COMANDOS_SKILLS if f"command({c}" not in texto]
-    if faltan:
-        return ("Añade " + " y ".join(f'"command({c})"' for c in faltan) +
-                f" a permissions.allow en {AGY_SETTINGS}: en modo headless agy deniega lo que no esté permitido.")
 
 
 def perfil_codex():
@@ -98,6 +88,7 @@ OPENCODE_GRATIS = {"opencode/glm-5.3-flash-free": ["low", "high", "max"],
 OPENCODE_DEFECTO = "opencode/glm-5.3-flash-free"
 # Lo que no está denegado lo aprueba --auto. execute es Code Mode, que trae fetch y se salta webfetch. grep no
 # filtra por ruta: con una carpeta concreta devolvería las notas personales aunque read las deniegue.
+AGY_PERMISOS = json.dumps({"permissions": {"allow": [f"command({c})" for c in COMANDOS_SKILLS]}})
 OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDOS_SKILLS},
                               f"*{TIPOS['personal']}*": "deny"}, "execute": "deny",
                      "webfetch": "deny", "websearch": "deny", "external_directory": "deny", "question": "deny",
@@ -126,10 +117,11 @@ HARNESSES = {
             "modelos": {"gemini-3.8-flash": ESFUERZOS_GEMINI, "gemini-3.8-flash-high": [],
                                                        "claude-opus-4-6-thinking": []},
             "esfuerzos": ESFUERZOS_GEMINI,
-            "nota": "Aplica las ediciones sin preguntar y los comandos según los permisos de tu settings.json de agy.",
-            "requisito": faltan_permisos_agy,
-            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", *opcion("--model", modelo),
-                                                     *opcion("--effort", esfuerzo)]},
+            "nota": "Aplica las ediciones sin preguntar y solo puede ejecutar scripts/pfg.py y python3 -m json.tool; "
+                    "deniega el resto sin preguntar.",
+            # --settings: los permisos solo para esta ejecución; el settings.json del docente no se toca.
+            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", "--settings", AGY_PERMISOS,
+                                                     *opcion("--model", modelo), *opcion("--effort", esfuerzo)]},
     "pi": {"nombre": "Pi", "bin": "pi", "instalar": {"unix": "curl -fsSL https://pi.dev/install.sh | sh",
                                                 "windows": 'powershell -c "irm https://pi.dev/install.ps1 | iex"', "url": "https://pi.dev"},
            "modelos": {"openai-codex/gpt-6-luna": ESFUERZOS_PI},
@@ -418,8 +410,7 @@ def detectar(forzar=False):
         if not rutas[k]:
             r[k] = {"estado": "no_instalado", "version": None, "problema": f"No se encuentra «{h['bin']}» en el PATH."}
         else:
-            requisito = (h.get("requisito") or (lambda: None))()
-            r[k] = {"estado": "requisito" if requisito else "instalado", "version": VERSIONES.get(rutas[k]), "problema": requisito}
+            r[k] = {"estado": "instalado", "version": VERSIONES.get(rutas[k]), "problema": None}
     return r
 
 

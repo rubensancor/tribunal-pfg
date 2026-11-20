@@ -100,6 +100,8 @@ assert "--model" not in server.comando_agente("pi", "", "", "x") and "--no-sessi
 assert "--thinking" not in server.comando_agente("pi", "", "", "x")
 assert server.comando_agente("pi", "", "low", "x")[-2:] == ["--thinking", "low"]
 assert server.comando_agente("agy", "m", "", "x")[-2:] == ["--model", "m"]
+argv = server.comando_agente("agy", "", "", "x")
+assert json.loads(argv[argv.index("--settings") + 1]) == {"permissions": {"allow": ["command(uv run scripts/pfg.py)", "command(python3 -m json.tool)"]}}
 assert server.comando_agente("agy", "m", "max", "x")[-4:] == ["--model", "m", "--effort", "max"]
 
 argv = server.comando_agente("codex", "gpt-6-luna", "xhigh", "x")
@@ -386,7 +388,7 @@ print("hecho: " + prompt)
     assert pedir("/pfgs/notas/paginas/p3.png")[0] == 404 and pedir("/pfgs/notas/paginas/../memoria.pdf")[0] == 404
 
     # Harnesses instalados, con un PATH simulado: codex responde a --version, pi no está, opencode se cuelga
-    # y agy está pero le falta el permiso. --version se pide una vez por binario hasta «Comprobar de nuevo».
+    # y agy sale con error. --version se pide una vez por binario hasta «Comprobar de nuevo».
     bins = tmp / "bin"
     bins.mkdir()
     llamadas = tmp / "llamadas"
@@ -397,19 +399,18 @@ print("codex-cli 9.1.0")
 ''')
     agente_falso(bins / "opencode", "time.sleep(10)\n")
     agente_falso(bins / "agy", "sys.exit(1)\n")
-    path, claude_bin, requisito = server.os.environ["PATH"], server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"]
+    path, claude_bin = server.os.environ["PATH"], server.HARNESSES["claude"]["bin"]
     server.os.environ["PATH"] = str(bins)
     server.HARNESSES["claude"]["bin"] = "claude"
-    server.HARNESSES["agy"]["requisito"] = lambda: "Añade el permiso."
     server.VERSIONES.clear()
     inicio = time.time()
     hs = server.detectar()
     assert time.time() - inicio < 5, "un --version colgado no frena la carga más que su timeout"
-    assert {k: v["estado"] for k, v in hs.items()} == {"claude": "no_instalado", "agy": "requisito", "pi": "no_instalado",
+    assert {k: v["estado"] for k, v in hs.items()} == {"claude": "no_instalado", "agy": "instalado", "pi": "no_instalado",
                                                       "codex": "instalado", "opencode": "instalado"}
     assert hs["codex"] == {"estado": "instalado", "version": "codex-cli 9.1.0", "problema": None}
     assert hs["opencode"]["version"] is None and hs["agy"]["version"] is None, "sin versión, pero instalado"
-    assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] == "Añade el permiso."
+    assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] is None
     codigo, cuerpo = pedir("/api/config")
     c = json.loads(cuerpo)
     assert codigo == 200 and set(c) == {"fases", "todos", "error", "sistema", "version", "harnesses"} and c["todos"] and list(c["harnesses"]) == list(server.HARNESSES)
@@ -442,7 +443,7 @@ print("codex-cli 9.1.0")
     assert codigo == 200 and json.loads(cuerpo)["harnesses"]["codex"]["estado"] == "instalado"
     assert llamadas.read_text(encoding="utf-8").count("x") == 2, "«Comprobar de nuevo» vuelve a pedir la versión"
     server.os.environ["PATH"] = path
-    server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"] = claude_bin, requisito
+    server.HARNESSES["claude"]["bin"] = claude_bin
 
     # Onboarding de agy con un agy falso. «agy models» solo responde con sesión; «authenticate» por ACP la abre,
     # salvo que exista «rechazar». El instalador falso lo copia en una carpeta del PATH, como el oficial.

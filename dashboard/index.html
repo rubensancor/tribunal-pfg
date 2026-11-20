@@ -237,8 +237,7 @@ form.ajustes .todos-harnesses input { width: auto; height: auto; }
 .estado-h { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .estado-h::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; background: var(--ok); }
 .estado-h.no_instalado::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
-.estado-h.requisito::before { background: var(--warn); }
-.estado-h.no_instalado, .estado-h.requisito { color: var(--ink); font-weight: 500; }
+.estado-h.no_instalado { color: var(--ink); font-weight: 500; }
 .harnesses p { margin: 0; font-size: 13px; }
 .harnesses .pendiente { color: var(--warn); overflow-wrap: anywhere; }
 .next { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; margin: 20px 0 0; }
@@ -900,10 +899,10 @@ const visibles = () => todos ? Object.entries(harnesses) : [["agy", harnesses.ag
 const niveles = (hk, modelo) => harnesses[hk].modelos[modelo] ?? harnesses[hk].esfuerzos;
 const opcionesEsfuerzo = (lista, actual) => (lista.length ? [["", "el del harness"], ...lista.map(n => [n, n])]
   : [["", "este modelo no lo admite"]]).map(([v, t]) => `<option value="${h(v)}"${v === actual ? " selected" : ""}>${h(t)}</option>`).join("");
-const ESTADO_HARNESS = {instalado: "Instalado", no_instalado: "No instalado", requisito: "Instalado, falta un permiso"};
+const ESTADO_HARNESS = {instalado: "Instalado", no_instalado: "No instalado"};
 // Junto al selector de cada fase: se puede guardar igual, pero «Ejecutar» fallará hasta que se instale.
 const faltaHarness = hk => ({no_instalado: "No está instalado: instálalo abajo antes de ejecutar esta fase.",
-  requisito: "Le falta un permiso: míralo abajo."})[harnesses[hk]?.estado] || "";
+})[harnesses[hk]?.estado] || "";
 const urlCorta = u => u.replace(/^https:\/\//, "").replace(/\/$/, "");
 let sistema = {id: "", nombre: ""};  // el del ordenador donde corre el servidor, que es el del docente
 const enlaceExterno = (url, texto) => `<a href="${h(url)}" target="_blank" rel="noopener noreferrer">${h(texto)}</a>`;
@@ -915,7 +914,6 @@ function vistaHarness([hk, hv]) {
       ? `<p>Para instalarlo en ${h(sistema.nombre)}, ejecuta en ${sistema.id === "windows" ? "PowerShell" : "un terminal"}:</p>${comando(hv.instalar.comando)}
         <p class="muted">Instrucciones oficiales: ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`
       : `<p>En ${h(sistema.nombre)} no tiene un comando de instalación: descárgalo desde su página oficial, ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`}
-    ${hv.estado === "requisito" ? `<p class="pendiente">${h(hv.problema)}</p>` : ""}
     <p class="muted">${h(hv.nota)}</p></li>`;
 }
 function vistaVersion(v) {
