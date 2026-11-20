@@ -183,6 +183,8 @@ with tempfile.TemporaryDirectory() as tmp:
             expect(pag.locator("#lista-notas")).to_contain_text("Respuesta del agente falso.")
             expect(pag.locator("#lista-notas textarea").first).to_have_value("¿Frente a qué versión?")
 
+            lector.get_by_label("Página siguiente").click()
+            pag.wait_for_function("document.querySelector('#hojas [data-pdf=\"2\"] img')?.naturalWidth > 0")  # la página se ve
             foto("7-tras-recargar")
             assert not errores, errores
             navegador.close()
