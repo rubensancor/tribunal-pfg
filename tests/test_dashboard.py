@@ -77,13 +77,16 @@ def agente_falso(ruta, codigo):
     return str(ruta)
 
 
-assert server.validar_config({}) == {f: {"harness": "claude", "modelo": "", "esfuerzo": ""} for f in server.FASES}
-assert server.validar_config({"leer-pfg": {"harness": "pi", "modelo": "openai-codex/gpt-6-luna"}})["leer-pfg"]["harness"] == "pi"
-assert "harness desconocido" in falla(server.validar_config, {"leer-pfg": {"harness": "bash"}})
+assert server.validar_config({}) == {"todos_los_harnesses": False, **{f: {"harness": "agy", "modelo": "", "esfuerzo": ""} for f in server.FASES}}
+# Sin el interruptor, solo agy: las fases con otro harness (las de antes de 0.2.7, o al apagarlo) pasan a agy.
+assert server.validar_config({"leer-pfg": {"harness": "claude", "modelo": "opus", "esfuerzo": "max"}})["leer-pfg"] == {"harness": "agy", "modelo": "", "esfuerzo": ""}
+assert server.validar_config({"todos_los_harnesses": "sí", "leer-pfg": {"harness": "pi"}})["leer-pfg"]["harness"] == "agy"
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "pi", "modelo": "openai-codex/gpt-6-luna"}})["leer-pfg"]["harness"] == "pi"
+assert "harness desconocido" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "bash"}})
 assert "modelo no válido" in falla(server.validar_config, {"leer-pfg": {"modelo": "--dangerously-skip-permissions"}})
 assert "modelo no válido" in falla(server.validar_config, {"leer-pfg": {"modelo": "opus; rm -rf /"}})
-assert server.validar_config({"leer-pfg": {"harness": "pi", "esfuerzo": "minimal"}})["leer-pfg"]["esfuerzo"] == "minimal"
-assert "Claude Code no admite el esfuerzo 'minimal'" in falla(server.validar_config, {"leer-pfg": {"esfuerzo": "minimal"}})
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "pi", "esfuerzo": "minimal"}})["leer-pfg"]["esfuerzo"] == "minimal"
+assert "Antigravity (agy) no admite el esfuerzo 'minimal'" in falla(server.validar_config, {"leer-pfg": {"esfuerzo": "minimal"}})
 assert server.validar_config({"leer-pfg": {"harness": "agy", "esfuerzo": "high"}})["leer-pfg"]["esfuerzo"] == "high"
 assert "por defecto" in falla(server.validar_config, {"leer-pfg": {"harness": "agy", "esfuerzo": "max"}})
 assert "claude-opus-4-6-thinking" in falla(server.validar_config, {"leer-pfg": {"harness": "agy", "modelo": "claude-opus-4-6-thinking", "esfuerzo": "low"}})
@@ -97,6 +100,8 @@ assert "--model" not in server.comando_agente("pi", "", "", "x") and "--no-sessi
 assert "--thinking" not in server.comando_agente("pi", "", "", "x")
 assert server.comando_agente("pi", "", "low", "x")[-2:] == ["--thinking", "low"]
 assert server.comando_agente("agy", "m", "", "x")[-2:] == ["--model", "m"]
+argv = server.comando_agente("agy", "", "", "x")
+assert json.loads(argv[argv.index("--settings") + 1]) == {"permissions": {"allow": ["command(uv run scripts/pfg.py)", "command(python3 -m json.tool)"]}}
 assert server.comando_agente("agy", "m", "max", "x")[-4:] == ["--model", "m", "--effort", "max"]
 
 argv = server.comando_agente("codex", "gpt-6-luna", "xhigh", "x")
@@ -106,13 +111,13 @@ assert argv[-3:-1] == ["-c", 'model_reasoning_effort="xhigh"']
 assert "solo puedes ejecutar" not in argv[-1] and ".agents/skills" in argv[-1], "Codex lee con la shell"
 assert server.HARNESSES["codex"]["env"] == {"UV_OFFLINE": "1"}
 assert not any("reasoning" in a for a in server.comando_agente("codex", "", "", "x")) and "--model" not in server.comando_agente("codex", "", "", "x")
-assert server.validar_config({"leer-pfg": {"harness": "codex", "modelo": "gpt-5.6-terra", "esfuerzo": "ultra"}})["leer-pfg"]["esfuerzo"] == "ultra"
-assert "no admite el esfuerzo" in falla(server.validar_config, {"leer-pfg": {"harness": "codex", "esfuerzo": "ultra"}})
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "codex", "modelo": "gpt-5.6-terra", "esfuerzo": "ultra"}})["leer-pfg"]["esfuerzo"] == "ultra"
+assert "no admite el esfuerzo" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "codex", "esfuerzo": "ultra"}})
 
-assert server.validar_config({"leer-pfg": {"harness": "opencode", "modelo": "opencode/beam-free", "esfuerzo": "xhigh"}})["leer-pfg"]["esfuerzo"] == "xhigh"
-assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "opencode/big-pickle"}})
-assert "solo admite" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "modelo": "anthropic/claude-opus-5-5"}})
-assert "no admite el esfuerzo" in falla(server.validar_config, {"leer-pfg": {"harness": "opencode", "esfuerzo": "medium"}})
+assert server.validar_config({"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "modelo": "opencode/beam-free", "esfuerzo": "xhigh"}})["leer-pfg"]["esfuerzo"] == "xhigh"
+assert "solo admite" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "modelo": "opencode/big-pickle"}})
+assert "solo admite" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "modelo": "anthropic/claude-opus-5-5"}})
+assert "no admite el esfuerzo" in falla(server.validar_config, {"todos_los_harnesses": True, "leer-pfg": {"harness": "opencode", "esfuerzo": "medium"}})
 argv = server.comando_agente("opencode", "", "", "x")
 assert argv[:4] == ["opencode", "run", "--standalone", "--auto"] and argv[argv.index("-m") + 1] == "opencode/glm-5.3-flash-free"
 assert server.comando_agente("opencode", "opencode/beam-free", "low", "x")[-2] == "opencode/beam-free#low"
@@ -129,6 +134,7 @@ assert not server.origen_local("evil.example:8765", None, 8765), "DNS rebinding"
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
     server.PFGS, server.CONFIG_EJECUCION, server.GRADOS = tmp / "pfgs", tmp / "ejecucion.json", tmp / "grados"
+    server.CONFIG_EJECUCION.write_text(json.dumps({"todos_los_harnesses": True, **{f: {"harness": "claude"} for f in server.FASES}}))
     agente = tmp / "agente"
     server.HARNESSES["claude"]["bin"] = agente_falso(agente, '''
 if "salir-mal" in prompt:
@@ -382,7 +388,7 @@ print("hecho: " + prompt)
     assert pedir("/pfgs/notas/paginas/p3.png")[0] == 404 and pedir("/pfgs/notas/paginas/../memoria.pdf")[0] == 404
 
     # Harnesses instalados, con un PATH simulado: codex responde a --version, pi no está, opencode se cuelga
-    # y agy está pero le falta el permiso. --version se pide una vez por binario hasta «Comprobar de nuevo».
+    # y agy sale con error. --version se pide una vez por binario hasta «Comprobar de nuevo».
     bins = tmp / "bin"
     bins.mkdir()
     llamadas = tmp / "llamadas"
@@ -393,22 +399,21 @@ print("codex-cli 9.1.0")
 ''')
     agente_falso(bins / "opencode", "time.sleep(10)\n")
     agente_falso(bins / "agy", "sys.exit(1)\n")
-    path, claude_bin, requisito = server.os.environ["PATH"], server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"]
+    path, claude_bin = server.os.environ["PATH"], server.HARNESSES["claude"]["bin"]
     server.os.environ["PATH"] = str(bins)
     server.HARNESSES["claude"]["bin"] = "claude"
-    server.HARNESSES["agy"]["requisito"] = lambda: "Añade el permiso."
     server.VERSIONES.clear()
     inicio = time.time()
     hs = server.detectar()
     assert time.time() - inicio < 5, "un --version colgado no frena la carga más que su timeout"
-    assert {k: v["estado"] for k, v in hs.items()} == {"claude": "no_instalado", "agy": "requisito", "pi": "no_instalado",
+    assert {k: v["estado"] for k, v in hs.items()} == {"claude": "no_instalado", "agy": "instalado", "pi": "no_instalado",
                                                       "codex": "instalado", "opencode": "instalado"}
     assert hs["codex"] == {"estado": "instalado", "version": "codex-cli 9.1.0", "problema": None}
     assert hs["opencode"]["version"] is None and hs["agy"]["version"] is None, "sin versión, pero instalado"
-    assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] == "Añade el permiso."
+    assert hs["pi"]["problema"] == "No se encuentra «pi» en el PATH." and hs["agy"]["problema"] is None
     codigo, cuerpo = pedir("/api/config")
     c = json.loads(cuerpo)
-    assert codigo == 200 and set(c) == {"fases", "error", "sistema", "version", "harnesses"} and list(c["harnesses"]) == list(server.HARNESSES)
+    assert codigo == 200 and set(c) == {"fases", "todos", "error", "sistema", "version", "harnesses"} and c["todos"] and list(c["harnesses"]) == list(server.HARNESSES)
     assert c["sistema"] == {"id": server.SISTEMA, "nombre": server.SISTEMAS[server.SISTEMA]}
     assert server.SISTEMA == {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
     for k, v in c["harnesses"].items():
@@ -438,7 +443,73 @@ print("codex-cli 9.1.0")
     assert codigo == 200 and json.loads(cuerpo)["harnesses"]["codex"]["estado"] == "instalado"
     assert llamadas.read_text(encoding="utf-8").count("x") == 2, "«Comprobar de nuevo» vuelve a pedir la versión"
     server.os.environ["PATH"] = path
-    server.HARNESSES["claude"]["bin"], server.HARNESSES["agy"]["requisito"] = claude_bin, requisito
+    server.HARNESSES["claude"]["bin"] = claude_bin
+
+    # Onboarding de agy con un agy falso. «agy models» solo responde con sesión; «authenticate» por ACP la abre,
+    # salvo que exista «rechazar». El instalador falso lo copia en una carpeta del PATH, como el oficial.
+    config, argv_instalar = server.CONFIG_EJECUCION.read_text(), server.argv_instalar
+    sesion, rechazar, vacia = tmp / "sesion-agy", tmp / "rechazar", tmp / "path-agy"
+    vacia.mkdir()
+    (tmp / "agy-src").mkdir()
+    agy = agente_falso(tmp / "agy-src" / "agy", f'''
+import json
+ses, rechazar = Path({str(sesion)!r}), Path({str(rechazar)!r})
+if sys.argv[1:] == ["models"]:
+    print("gemini-3.8-flash" if ses.exists() else "Not signed in")
+    sys.exit(0 if ses.exists() else 1)
+for linea in sys.stdin:  # agy acp
+    m = json.loads(linea)
+    print("ruido que no es JSON", flush=True)
+    if m["method"] == "authenticate":
+        print("Abre https://accounts.google.com/o/oauth2/auth?x=1 para iniciar sesión", file=sys.stderr, flush=True)
+        if rechazar.exists():
+            print(json.dumps({{"jsonrpc": "2.0", "id": m["id"], "error": {{"code": 1, "message": "cuenta no válida"}}}}), flush=True)
+            continue
+        ses.write_text("ok")
+    print(json.dumps({{"jsonrpc": "2.0", "id": m["id"], "result": {{}}}}), flush=True)
+''')
+
+    def terminar(nombre):
+        for _ in range(100):
+            if (t := server.estado_onboarding()[nombre]) and t["estado"] != "en_curso":
+                return t
+            time.sleep(0.1)
+        raise AssertionError(f"{nombre} no termina")
+
+    server.os.environ["PATH"] = str(vacia)
+    server.CONFIG_EJECUCION.write_text(json.dumps({"todos_los_harnesses": True}))
+    assert server.estado_onboarding(forzar=True)["paso"] == "listo", "con todos los harnesses no hay onboarding"
+    server.CONFIG_EJECUCION.write_text("{}")
+    codigo, cuerpo = pedir("/api/onboarding")
+    o = json.loads(cuerpo)
+    assert codigo == 200 and o["paso"] == "instalar" and o["instalar"] is None and o["url"].startswith("https://")
+    assert o["comando"] == server.HARNESSES["agy"]["instalar"]["windows" if server.SISTEMA == "windows" else "unix"]
+    assert server.argv_instalar()[-1].endswith(o["comando"]), "se ejecuta el mismo comando que se enseña"
+    server.argv_instalar = lambda: [sys.executable, "-c", "print('sin red'); raise SystemExit(7)"]
+    assert pedir("/api/onboarding/instalar", {})[0] == 202
+    t = terminar("instalar")
+    assert t["estado"] == "error" and "código 7" in t["error"] and "sin red" in t["log"], t
+    server.argv_instalar = lambda: [sys.executable, "-c", f"import shutil; shutil.copy({agy!r}, {str(vacia)!r})"]
+    assert pedir("/api/onboarding/instalar", {})[0] == 202
+    assert terminar("instalar")["estado"] == "ok"
+    assert pedir("/api/onboarding/instalar", {})[0] == 409, "ya está instalado"
+    o = server.estado_onboarding()
+    assert o["paso"] == "sesion" and "Not signed in" in o["sin_sesion"], o
+    rechazar.write_text("")
+    assert pedir("/api/onboarding/sesion", {})[0] == 202
+    t = terminar("sesion")
+    assert t["estado"] == "error" and t["error"] == "cuenta no válida" and server.estado_onboarding()["paso"] == "sesion", t
+    rechazar.unlink()
+    assert pedir("/api/onboarding/sesion", {})[0] == 202
+    t = terminar("sesion")
+    assert t["estado"] == "ok" and t["enlace"] == "https://accounts.google.com/o/oauth2/auth?x=1", t
+    assert server.estado_onboarding()["paso"] == "listo", "tras iniciar sesión se vuelve a comprobar"
+    sesion.unlink()
+    assert server.estado_onboarding()["paso"] == "listo", "la sesión se recuerda"
+    assert server.estado_onboarding(forzar=True)["paso"] == "sesion", "«Comprobar de nuevo» la vuelve a mirar"
+    server.os.environ["PATH"], server.argv_instalar = path, argv_instalar
+    server.CONFIG_EJECUCION.write_text(config)
+    server.AGY.update(instalar=None, sesion=None, con_sesion=None)
 
     # Programas del grado. Las guías se descargan de un servidor local, no de internet. La de Deusto tarda 2 s.
     simultaneas, pedidas = {"ahora": 0, "max": 0}, []

@@ -8,7 +8,7 @@ Prepara las defensas de Proyecto Fin de Grado:
 - La skill **`preguntas-pfg`** genera preguntas para la defensa y después las clasifica por categorías.
 - Un **lector** en el dashboard para leer la memoria y anotarla. La skill **`anotaciones-pfg`** responde las notas que dirijas al agente.
 
-Funciona con Claude Code, Codex, Pi, Antigravity y OpenCode: las skills están en `.agents/skills/`. La IA prepara y el tribunal juzga: el sistema no pone notas.
+Funciona con Antigravity. Si activas **Mostrar todos los harnesses** en Ajustes, también con Claude Code, Codex, Pi y OpenCode: las skills están en `.agents/skills/`. La IA prepara y el tribunal juzga: el sistema no pone notas.
 
 Las memorias contienen datos personales y trabajo sin publicar. Se quedan en tu ordenador, en `pfgs/`, pero su contenido llega al proveedor del modelo que use tu agente: usa la herramienta de IA que autorice tu universidad.
 
@@ -35,24 +35,30 @@ La primera vez tarda un minuto, mientras descarga Python y pymupdf. Tus memorias
 
 ### Instala un agente
 
-Las skills necesitan un agente, que aquí llamamos harness. Basta con uno. En **Ajustes** el dashboard muestra qué harnesses tienes, con su versión, y para los que faltan el comando de instalación de tu sistema y su página oficial. Después de instalar uno, pulsa **Comprobar de nuevo**.
+Las skills necesitan un agente, que aquí llamamos harness. El dashboard usa [Antigravity](https://antigravity.google/docs/getting-started?tab=cli). Mientras no esté listo, el dashboard te guía al abrirse: **Instalar Antigravity** ejecuta el instalador oficial e **Iniciar sesión con Google** abre el navegador. Usa una cuenta personal de Google: las de Google Workspace no incluyen Antigravity. Con **Configurar después** puedes leer y anotar memorias sin agente. Para instalarlo a mano:
 
-Los comandos oficiales:
+- macOS y Linux: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+- Windows (PowerShell): `irm https://antigravity.google/cli/install.ps1 | iex`
+
+No hace falta darle permisos: el dashboard le deja ejecutar solo lo que necesitan las skills. **Ajustes** muestra si está instalado y su versión. Después de instalarlo, pulsa **Comprobar de nuevo**.
+
+#### Otros harnesses
+
+Si prefieres otro agente, marca **Mostrar todos los harnesses** en Ajustes: aparece la columna Harness en cada fase y la lista con los demás. Al desmarcarla, las fases con otro harness vuelven a Antigravity con su modelo por defecto. Los comandos oficiales:
 
 | Harness | macOS y Linux | Windows (PowerShell) |
 |---|---|---|
 | [Claude Code](https://code.claude.com/docs/en/setup) | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
 | [Codex](https://learn.chatgpt.com/docs/codex/cli) | `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | mira su página |
 | [Pi](https://pi.dev) | `curl -fsSL https://pi.dev/install.sh \| sh` | `powershell -c "irm https://pi.dev/install.ps1 \| iex"` |
-| [Antigravity](https://antigravity.google/docs/getting-started?tab=cli) | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` | `irm https://antigravity.google/cli/install.ps1 \| iex` |
 | [OpenCode](https://opencode.ai/docs) | `curl -fsSL https://opencode.ai/v2/install \| bash` | sin instalador: descarga el binario de su página |
 
-Con Pi, instala también [pi-subagents](https://github.com/tintinweb/pi-subagents) para que los lectores usen un modelo barato. Con Antigravity, revisa los permisos en [Detalles de cada harness](#detalles-de-cada-harness).
+Con Pi, instala también [pi-subagents](https://github.com/tintinweb/pi-subagents) para que los lectores usen un modelo barato.
 
 ## Uso diario
 
 1. Arrastra los PDF al dashboard.
-2. Cada tarjeta muestra el siguiente paso. Pulsa su botón, como **Leer la memoria con Claude Code**, o copia el comando y pégalo en tu agente, abierto en la carpeta del proyecto (`tribunal-pfg`, o `Documentos/Tribunal PFG` si usas la app):
+2. Cada tarjeta muestra el siguiente paso. Pulsa su botón, como **Leer la memoria con Antigravity (agy)**, o copia el comando y pégalo en tu agente, abierto en la carpeta del proyecto (`tribunal-pfg`, o `Documentos/Tribunal PFG` si usas la app):
    - `usa la skill leer-pfg con el PFG <id>`
    - `usa la skill grado-pfg con el PFG <id>`, si has cargado programas en **Grados**
    - `usa la skill preguntas-pfg con el PFG <id>`
@@ -64,7 +70,7 @@ Usa el modelo más capaz como modelo principal de la sesión: Opus, GPT-6 o Gemi
 
 ### Ejecutar desde el dashboard
 
-El botón de cada tarjeta lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el harness, el modelo y el esfuerzo de razonamiento de cada fase; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
+El botón de cada tarjeta lanza el agente en modo no interactivo y la tarjeta muestra el avance. En **Ajustes** eliges el modelo y el esfuerzo de razonamiento de cada fase, y el harness si has marcado **Mostrar todos los harnesses**; se guardan en `config/ejecucion.json`, que no se sube a git. El registro de cada ejecución queda en `pfgs/<id>/ejecuciones/`. Al parar el dashboard se detienen las ejecuciones en curso.
 
 ### Leer y anotar la memoria
 
@@ -117,7 +123,7 @@ Las memorias y tus notas se quedan en `pfgs/`, que no se sube a git. Las notas p
 | Harness | Se lanza con | Permisos |
 |---|---|---|
 | Claude Code | `claude -p … --permission-mode dontAsk` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`; el resto se deniega |
-| Antigravity | `agy -p … --mode accept-edits` | los de tu `settings.json` de agy: añade `"command(uv run scripts/pfg.py)"` y `"command(python3 -m json.tool)"` a `permissions.allow`, o terminará sin hacer nada |
+| Antigravity | `agy -p … --mode accept-edits --settings …` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`; el resto se deniega. Se fijan con `--settings` en cada ejecución, sin tocar tu `settings.json` de agy |
 | Codex | `codex exec -c default_permissions="tribunal" …` | cualquier comando, pero en su sandbox: sin red, sin leer tus notas personales y escribiendo solo en el proyecto y en la caché de uv; el perfil `tribunal` se fija con `-c` |
 | Pi | `pi -p … --no-session --approve` | ninguno: puede ejecutar cualquier comando |
 | OpenCode | `opencode run --standalone --auto -m <modelo>#<esfuerzo>` | solo `uv run scripts/pfg.py` y `python3 -m json.tool`, sin web, sin archivos fuera del proyecto y sin leer tus notas personales (por eso tampoco usa grep); se fijan en `OPENCODE_CONFIG_CONTENT` |

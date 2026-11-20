@@ -60,26 +60,16 @@ REPO = "rubensancor/tribunal-pfg"
 GITHUB = "https://api.github.com"  # los tests lo apuntan a un servidor local
 APP = os.environ.get("TRIBUNAL_APP") == "1"  # lo lanza la app de escritorio (main.js), que pone la ventana
 REINICIO_APP = 75  # tras actualizar, la app vuelve a arrancar el servidor si sale con este código
-AGY_SETTINGS = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 
 
 def opcion(flag, valor):
     return [flag, valor] if valor else []
 
 
-def faltan_permisos_agy():
-    rutas = [AGY_SETTINGS, *(Path.home() / ".gemini" / "config" / "projects").glob("**/*.json")]
-    texto = "".join(p.read_text(errors="ignore") for p in rutas if p.is_file())
-    faltan = [c for c in COMANDOS_SKILLS if f"command({c}" not in texto]
-    if faltan:
-        return ("Añade " + " y ".join(f'"command({c})"' for c in faltan) +
-                f" a permissions.allow en {AGY_SETTINGS}: en modo headless agy deniega lo que no esté permitido.")
-
-
 def perfil_codex():
     """Perfil de permisos de Codex: el sandbox de :workspace (proyecto, sin red), más la caché de uv, que uv run
     necesita, y sin las notas personales. Es una regla del sandbox: cubre la shell, archivos nuevos, renombrados y enlaces."""
-    uv = subprocess.run(["uv", "cache", "dir"], capture_output=True, text=True).stdout.strip() or str(Path.home() / ".cache" / "uv")
+    uv = subprocess.run(["uv", "cache", "dir"], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip() or str(Path.home() / ".cache" / "uv")
     fs = "{" + f'":project_roots"={{{json.dumps("**/" + TIPOS["personal"])}="deny"}},{json.dumps(uv)}="write"' + "}"
     return ["-c", 'default_permissions="tribunal"', "-c", 'permissions.tribunal.extends=":workspace"',
             "-c", f"permissions.tribunal.filesystem={fs}"]
@@ -98,6 +88,7 @@ OPENCODE_GRATIS = {"opencode/glm-5.3-flash-free": ["low", "high", "max"],
 OPENCODE_DEFECTO = "opencode/glm-5.3-flash-free"
 # Lo que no está denegado lo aprueba --auto. execute es Code Mode, que trae fetch y se salta webfetch. grep no
 # filtra por ruta: con una carpeta concreta devolvería las notas personales aunque read las deniegue.
+AGY_PERMISOS = json.dumps({"permissions": {"allow": [f"command({c})" for c in COMANDOS_SKILLS]}})
 OPENCODE_PERMISOS = {"bash": {"*": "deny", **{f"{c} *": "allow" for c in COMANDOS_SKILLS},
                               f"*{TIPOS['personal']}*": "deny"}, "execute": "deny",
                      "webfetch": "deny", "websearch": "deny", "external_directory": "deny", "question": "deny",
@@ -126,10 +117,11 @@ HARNESSES = {
             "modelos": {"gemini-3.8-flash": ESFUERZOS_GEMINI, "gemini-3.8-flash-high": [],
                                                        "claude-opus-4-6-thinking": []},
             "esfuerzos": ESFUERZOS_GEMINI,
-            "nota": "Aplica las ediciones sin preguntar y los comandos según los permisos de tu settings.json de agy.",
-            "requisito": faltan_permisos_agy,
-            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", *opcion("--model", modelo),
-                                                     *opcion("--effort", esfuerzo)]},
+            "nota": "Aplica las ediciones sin preguntar y solo puede ejecutar scripts/pfg.py y python3 -m json.tool; "
+                    "deniega el resto sin preguntar.",
+            # --settings: los permisos solo para esta ejecución; el settings.json del docente no se toca.
+            "args": lambda prompt, modelo, esfuerzo: ["-p", prompt, "--mode", "accept-edits", "--settings", AGY_PERMISOS,
+                                                     *opcion("--model", modelo), *opcion("--effort", esfuerzo)]},
     "pi": {"nombre": "Pi", "bin": "pi", "instalar": {"unix": "curl -fsSL https://pi.dev/install.sh | sh",
                                                 "windows": 'powershell -c "irm https://pi.dev/install.ps1 | iex"', "url": "https://pi.dev"},
            "modelos": {"openai-codex/gpt-6-luna": ESFUERZOS_PI},
@@ -221,7 +213,9 @@ def generado(d, nombre):
         m = PAGINA.fullmatch(nombre)
         cmd = ["imagen", d.name, str(int(m[1]))] if m[1] else ["paginas", d.name]
         try:
-            subprocess.run(["uv", "run", str(RAIZ / "scripts" / "pfg.py"), *cmd], cwd=RAIZ, capture_output=True, timeout=60)
+            # stdin=DEVNULL: en la app el stdin es un pipe que lee otro hilo, y en Windows heredarlo cuelga al hijo
+            subprocess.run(["uv", "run", str(RAIZ / "scripts" / "pfg.py"), *cmd], cwd=RAIZ, capture_output=True, timeout=60,
+                           stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return None
     return ruta if ruta.exists() else None
@@ -304,6 +298,13 @@ def cambiado(g):
     return t
 
 
+def mtime(p):
+    try:
+        return p.stat().st_mtime
+    except FileNotFoundError:  # el .tmp que escribir() acaba de renombrar, o un PFG que se está borrando
+        return 0
+
+
 def resumen(d):
     """Estado deducido de los archivos que existen; nadie escribe un campo de estado."""
     cola = COLA.copy()  # sin el cerrojo: lanzar llama a resumen con él cogido
@@ -331,7 +332,7 @@ def resumen(d):
             "comando": f"usa la skill {paso} con el PFG {d.name}" if paso else None,
             "ejecutor": HARNESSES[config_ejecucion()[paso]["harness"]]["nombre"] if paso else None,
             "ejecucion": ejecucion(d.name, paso), "cola": cola.index(d.name) + 1 if d.name in cola else None,
-            "modificado": max(p.stat().st_mtime for p in d.rglob("*"))}
+            "modificado": max(map(mtime, d.rglob("*")), default=0)}
 
 
 def niveles(harness, modelo):
@@ -339,16 +340,23 @@ def niveles(harness, modelo):
     return h["modelos"].get(modelo, h["esfuerzos"])
 
 
+TODOS = "todos_los_harnesses"  # sin él, en Ajustes solo se ve Antigravity
+
+
 def validar_config(raw):
-    """{fase: {harness, modelo, esfuerzo}} completo; ValueError con el motivo si algo no vale."""
+    """{fase: {harness, modelo, esfuerzo}, TODOS: bool} completo; ValueError con el motivo si algo no vale.
+    Sin TODOS, las fases con otro harness pasan a agy con su modelo y su esfuerzo por defecto: así se migran
+    los ejecucion.json de antes del interruptor y se apaga el interruptor."""
     if not isinstance(raw, dict):
         raise ValueError("se esperaba un objeto {fase: {harness, modelo, esfuerzo}}")
-    cfg = {}
+    cfg = {TODOS: raw.get(TODOS) is True}
     for fase in FASES:
         v = raw.get(fase) or {}
         if not isinstance(v, dict):
             raise ValueError(f"{fase}: se esperaba un objeto")
-        harness, modelo, esfuerzo = v.get("harness", "claude"), v.get("modelo", ""), v.get("esfuerzo", "")
+        harness, modelo, esfuerzo = v.get("harness", "agy"), v.get("modelo", ""), v.get("esfuerzo", "")
+        if not cfg[TODOS] and harness != "agy":
+            harness, modelo, esfuerzo = "agy", "", ""
         if harness not in HARNESSES:
             raise ValueError(f"{fase}: harness desconocido {harness!r}")
         if not isinstance(modelo, str) or not MODELO.fullmatch(modelo):
@@ -411,9 +419,145 @@ def detectar(forzar=False):
         if not rutas[k]:
             r[k] = {"estado": "no_instalado", "version": None, "problema": f"No se encuentra «{h['bin']}» en el PATH."}
         else:
-            requisito = (h.get("requisito") or (lambda: None))()
-            r[k] = {"estado": "requisito" if requisito else "instalado", "version": VERSIONES.get(rutas[k]), "problema": requisito}
+            r[k] = {"estado": "instalado", "version": VERSIONES.get(rutas[k]), "problema": None}
     return r
+
+
+# ---------- Onboarding de Antigravity ----------
+# El instalador oficial deja agy aquí y añade la carpeta al perfil de la shell, que este proceso ya no relee:
+# sin esto no lo vería hasta reiniciar. Una carpeta que aún no existe en el PATH no molesta.
+AGY_DIR = (Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "agy" / "bin" if SISTEMA == "windows"
+           else Path.home() / ".local" / "bin")
+os.environ["PATH"] += os.pathsep + str(AGY_DIR)
+AGY = {"instalar": None, "sesion": None, "con_sesion": None}  # tareas en curso o terminadas, y la sesión comprobada
+AGY_CERROJO = threading.Lock()
+ENLACE = re.compile(r"https://\S+")
+MAX_TAREA = 600  # s: instalar o iniciar sesión no puede quedarse colgado para siempre
+
+
+def argv_instalar():
+    """El comando oficial de HARNESSES, el mismo que se muestra para copiarlo si esto falla."""
+    cmd = HARNESSES["agy"]["instalar"]["windows" if SISTEMA == "windows" else "unix"]
+    if SISTEMA == "windows":
+        return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd]
+    return ["bash", "-c", "set -o pipefail; " + cmd]  # sin pipefail, un curl que falla acabaría con 0
+
+
+def argv_sesion():
+    return [binario("agy"), "acp"]
+
+
+def tarea(nombre, argv, cuerpo):
+    """Lanza en un hilo `cuerpo(proc, t)` sobre `argv` y deja su estado en AGY[nombre]: en_curso, ok o error."""
+    with AGY_CERROJO:
+        if (t := AGY[nombre]) and t["estado"] == "en_curso":
+            raise ValueError("ya está en marcha")
+        try:
+            proc = subprocess.Popen(argv, cwd=RAIZ, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, encoding="utf-8", errors="replace", start_new_session=True)
+        except OSError as e:
+            raise ValueError(f"no se ha podido lanzar {argv[0]}: {e}")
+        t = AGY[nombre] = {"estado": "en_curso", "log": "", "enlace": None, "error": None}
+
+    def leer_stderr():
+        for linea in proc.stderr:
+            t["log"] += linea
+            if not t["enlace"] and (m := ENLACE.search(linea)):
+                t["enlace"] = m.group(0)  # por si el navegador no se abre solo
+
+    def correr():
+        threading.Thread(target=leer_stderr, daemon=True).start()
+        agotado = threading.Event()
+        reloj = threading.Timer(MAX_TAREA, lambda: (agotado.set(), matar_arbol(proc)))
+        reloj.start()
+        try:
+            t["error"] = cuerpo(proc, t)
+        except (OSError, ValueError) as e:
+            t["error"] = str(e)
+        finally:
+            reloj.cancel()
+            matar_arbol(proc)
+            proc.wait()
+            if agotado.is_set():
+                t["error"] = f"no ha terminado en {MAX_TAREA // 60} minutos"
+            AGY["con_sesion"] = None  # lo que haya cambiado se vuelve a comprobar
+            t["estado"] = "error" if t["error"] else "ok"
+    threading.Thread(target=correr, daemon=True).start()
+
+
+def instalar_agy():
+    if shutil.which("agy"):
+        raise ValueError("Antigravity ya está instalado")
+
+    def cuerpo(proc, t):
+        proc.stdin.close()
+        for linea in proc.stdout:
+            t["log"] += linea
+        return None if proc.wait() == 0 else f"el instalador terminó con el código {proc.returncode}"
+    tarea("instalar", argv_instalar(), cuerpo)
+
+
+def iniciar_sesion_agy():
+    """Inicia sesión con Google por ACP (agy acp): agy abre el navegador y responde cuando se completa."""
+    def cuerpo(proc, t):
+        def pedir(i, metodo, params):
+            proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": i, "method": metodo, "params": params}) + "\n")
+            proc.stdin.flush()
+            for linea in proc.stdout:
+                try:
+                    msg = json.loads(linea)
+                except ValueError:
+                    t["log"] += linea
+                    t["enlace"] = t["enlace"] or (m := ENLACE.search(linea)) and m.group(0)
+                    continue
+                if msg.get("id") == i and "method" not in msg:
+                    return msg
+                if "method" in msg and "id" in msg:  # una petición de agy que este cliente no sabe atender
+                    proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": msg["id"],
+                                                 "error": {"code": -32601, "message": "no disponible"}}) + "\n")
+                    proc.stdin.flush()
+            raise ValueError("agy se ha cerrado antes de responder")
+        pedir(1, "initialize", {"protocolVersion": 1, "clientCapabilities": {}})
+        r = pedir(2, "authenticate", {"methodId": "oauth-personal"})
+        return r["error"].get("message") or "no se ha podido iniciar sesión" if r.get("error") else None
+    tarea("sesion", argv_sesion(), cuerpo)
+
+
+def con_sesion():
+    """(sí o no, por qué) según `agy models`, que pide la lista al servidor y solo responde con sesión. Se recuerda
+    hasta «Comprobar de nuevo» o hasta que termina una instalación o un inicio de sesión."""
+    if AGY["con_sesion"] is None:
+        try:
+            p = subprocess.Popen([binario("agy"), "models"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                 encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, start_new_session=True, cwd=RAIZ)
+            try:
+                out = p.communicate(timeout=30)[0]
+            except subprocess.TimeoutExpired:
+                matar_arbol(p)
+                p.communicate()
+                out, p.returncode = "agy no ha respondido en 30 s", 1
+            AGY["con_sesion"] = (p.returncode == 0 and bool(out.strip()), out.strip()[-500:])
+        except (OSError, ValueError) as e:
+            AGY["con_sesion"] = (False, str(e))
+    return AGY["con_sesion"]
+
+
+def estado_onboarding(forzar=False):
+    """Qué le falta a agy para que se pueda usar el dashboard: instalar, sesion o nada (listo)."""
+    if forzar:
+        AGY["con_sesion"] = None
+    vista = lambda t: t and {k: t[k] for k in ("estado", "enlace", "error")} | {"log": t["log"][-2000:]}
+    r = {"instalar": vista(AGY["instalar"]), "sesion": vista(AGY["sesion"]),
+         "comando": HARNESSES["agy"]["instalar"]["windows" if SISTEMA == "windows" else "unix"],
+         "url": HARNESSES["agy"]["instalar"]["url"], "sistema": SISTEMAS[SISTEMA]}
+    if config_ejecucion()[TODOS]:
+        return {**r, "paso": "listo"}  # quien ha elegido otros harnesses ya sabe prepararlos en Ajustes
+    if not shutil.which("agy"):
+        return {**r, "paso": "instalar"}
+    if (AGY["sesion"] or {}).get("estado") == "en_curso":
+        return {**r, "paso": "sesion"}
+    ok, por_que = con_sesion()
+    return {**r, "paso": "listo" if ok else "sesion", "sin_sesion": None if ok else por_que}
 
 
 ULTIMA = {}  # la última release de GitHub, {version, url} o {error}; «Comprobar de nuevo» la vuelve a pedir
@@ -528,7 +672,8 @@ def vista_config(forzar=False):
         error = f"{CONFIG_EJECUCION.name} no es válido y se usan los valores por defecto: {e}"
     estados = detectar(forzar)
     so = "windows" if SISTEMA == "windows" else "unix"
-    return {"fases": {f: {"nombre": FASES[f], **c} for f, c in config_ejecucion().items()}, "error": error,
+    cfg = config_ejecucion()
+    return {"fases": {f: {"nombre": FASES[f], **cfg[f]} for f in FASES}, "todos": cfg[TODOS], "error": error,
             "sistema": {"id": SISTEMA, "nombre": SISTEMAS[SISTEMA]}, "version": estado_version(),
             "harnesses": {k: {"nombre": h["nombre"], "modelos": h["modelos"], "esfuerzos": h["esfuerzos"], "nota": h["nota"],
                               "instalar": {"comando": h["instalar"][so], "url": h["instalar"]["url"]}, **estados[k]}
@@ -663,7 +808,7 @@ def borrar(d):
 def matar_arbol(proc):
     """El proceso y lo que haya lanzado. En POSIX, proc tiene que ir en su propio grupo (start_new_session)."""
     if os.name == "nt":  # sin grupos de procesos: taskkill /T baja el árbol
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, stdin=subprocess.DEVNULL)
         return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
@@ -958,6 +1103,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.responder(200, vista_config())
         if ruta == "/api/version":
             return self.responder(200, estado_version())
+        if ruta == "/api/onboarding":
+            return self.responder(200, estado_onboarding())
         if ruta == "/api/pfgs":
             dirs = [d for d in PFGS.iterdir() if (d / "memoria.pdf").exists()] if PFGS.exists() else []
             return self.responder(200, sorted((resumen(d) for d in dirs), key=lambda r: -r["modificado"]))
@@ -991,6 +1138,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         url = urlparse(self.path)
         try:
+            if url.path in ("/api/onboarding/instalar", "/api/onboarding/sesion"):
+                instalar_agy() if url.path.endswith("instalar") else iniciar_sesion_agy()
+                return self.responder(202, estado_onboarding())
+            if url.path == "/api/onboarding/comprobar":
+                return self.responder(200, estado_onboarding(forzar=True))
             if url.path == "/api/config/detectar":
                 return self.responder(200, vista_config(forzar=True))
             if url.path == "/api/actualizar":
@@ -1092,6 +1244,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     threading.Thread(target=preparar_cola, daemon=True).start()
     threading.Thread(target=detectar, daemon=True).start()  # las versiones, en caché antes de abrir Ajustes
+    threading.Thread(target=estado_onboarding, daemon=True).start()  # la sesión de agy, antes de la primera página
     threading.Thread(target=descargar_cola, daemon=True).start()
     threading.Thread(target=comprobar_version, daemon=True).start()
     try:

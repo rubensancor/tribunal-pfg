@@ -208,6 +208,20 @@ form.ajustes :is(select, input):hover:not(:disabled) { border-color: var(--muted
 form.ajustes select:disabled { cursor: not-allowed; color: var(--muted); background-color: var(--bg); }
 form.ajustes td { vertical-align: middle; }
 form.ajustes .btn { margin-top: 16px; }
+.pasos-ob { list-style: none; margin: 16px 0; display: grid; gap: 0; }
+.paso-ob { display: grid; gap: 8px; padding: 14px 0; border-top: 1px solid var(--rule); }
+.paso-ob:first-child { border-top: 0; padding-top: 0; }
+.paso-ob:last-child { padding-bottom: 0; }
+.paso-ob .cab { display: flex; align-items: center; gap: 10px; }
+.paso-ob .num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--control); font-size: 13px; }
+.paso-ob.hecho .num { background: var(--ok-soft); border-color: var(--ok-soft); color: var(--ok); }
+.paso-ob.pendiente { color: var(--muted); }
+.paso-ob p { margin: 0; max-width: 70ch; }
+.log-ob { max-height: 180px; overflow: auto; margin: 0; padding: 8px 10px; background: var(--bg); border-radius: var(--radius-control); font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.acciones-ob { display: flex; flex-wrap: wrap; gap: 8px; }
+body[data-vista="onboarding"] :is(.top .nav, .top .acciones label, #cargar) { visibility: hidden; }  /* hasta que agy esté listo o se aparte */
+form.ajustes .todos-harnesses { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+form.ajustes .todos-harnesses input { width: auto; height: auto; }
 /* Harnesses: el estado en tinta con un punto, como los bloques bien/flojo de la ficha. Sin instalar, el punto hueco. */
 .falta-harness { display: block; margin-top: 4px; font-size: 12px; color: var(--warn); }
 .falta-harness:empty { display: none; }
@@ -223,8 +237,7 @@ form.ajustes .btn { margin-top: 16px; }
 .estado-h { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .estado-h::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; background: var(--ok); }
 .estado-h.no_instalado::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
-.estado-h.requisito::before { background: var(--warn); }
-.estado-h.no_instalado, .estado-h.requisito { color: var(--ink); font-weight: 500; }
+.estado-h.no_instalado { color: var(--ink); font-weight: 500; }
 .harnesses p { margin: 0; font-size: 13px; }
 .harnesses .pendiente { color: var(--warn); overflow-wrap: anywhere; }
 .next { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; margin: 20px 0 0; }
@@ -881,14 +894,15 @@ function vistaPreguntas(p, cat) {
 }
 
 // ---------- carga y refresco ----------
-let harnesses = {};
+let harnesses = {}, todos = false;
+const visibles = () => todos ? Object.entries(harnesses) : [["agy", harnesses.agy]];  // sin el interruptor, solo Antigravity
 const niveles = (hk, modelo) => harnesses[hk].modelos[modelo] ?? harnesses[hk].esfuerzos;
 const opcionesEsfuerzo = (lista, actual) => (lista.length ? [["", "el del harness"], ...lista.map(n => [n, n])]
   : [["", "este modelo no lo admite"]]).map(([v, t]) => `<option value="${h(v)}"${v === actual ? " selected" : ""}>${h(t)}</option>`).join("");
-const ESTADO_HARNESS = {instalado: "Instalado", no_instalado: "No instalado", requisito: "Instalado, falta un permiso"};
+const ESTADO_HARNESS = {instalado: "Instalado", no_instalado: "No instalado"};
 // Junto al selector de cada fase: se puede guardar igual, pero «Ejecutar» fallará hasta que se instale.
 const faltaHarness = hk => ({no_instalado: "No está instalado: instálalo abajo antes de ejecutar esta fase.",
-  requisito: "Le falta un permiso: míralo abajo."})[harnesses[hk]?.estado] || "";
+})[harnesses[hk]?.estado] || "";
 const urlCorta = u => u.replace(/^https:\/\//, "").replace(/\/$/, "");
 let sistema = {id: "", nombre: ""};  // el del ordenador donde corre el servidor, que es el del docente
 const enlaceExterno = (url, texto) => `<a href="${h(url)}" target="_blank" rel="noopener noreferrer">${h(texto)}</a>`;
@@ -900,7 +914,6 @@ function vistaHarness([hk, hv]) {
       ? `<p>Para instalarlo en ${h(sistema.nombre)}, ejecuta en ${sistema.id === "windows" ? "PowerShell" : "un terminal"}:</p>${comando(hv.instalar.comando)}
         <p class="muted">Instrucciones oficiales: ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`
       : `<p>En ${h(sistema.nombre)} no tiene un comando de instalación: descárgalo desde su página oficial, ${enlace}. Después, pulsa «Comprobar de nuevo».</p>`}
-    ${hv.estado === "requisito" ? `<p class="pendiente">${h(hv.problema)}</p>` : ""}
     <p class="muted">${h(hv.nota)}</p></li>`;
 }
 function vistaVersion(v) {
@@ -915,28 +928,80 @@ function vistaVersion(v) {
 function vistaAjustes(c) {
   harnesses = c.harnesses;
   sistema = c.sistema;
+  todos = c.todos;
+  const falta = k => `<span class="falta-harness" id="falta-${k}">${h(faltaHarness(c.fases[k].harness))}</span>`;
   const fila = ([k, f]) => `<tr><td>${h(f.nombre)}</td>
-    <td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" aria-describedby="falta-${k}" data-modelo="${k}">${Object.entries(c.harnesses).map(([hk, hv]) =>
+    ${todos ? `<td><select name="${k}.harness" aria-label="Harness de ${h(f.nombre)}" aria-describedby="falta-${k}" data-modelo="${k}">${visibles().map(([hk, hv]) =>
       `<option value="${hk}"${hk === f.harness ? " selected" : ""}>${h(hv.nombre)}${hv.estado === "no_instalado" ? " (no instalado)" : ""}</option>`).join("")}</select>
-      <span class="falta-harness" id="falta-${k}">${h(faltaHarness(f.harness))}</span></td>
-    <td><input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off" data-fase="${k}"></td>
+      ${falta(k)}</td>` : ""}
+    <td>${todos ? "" : `<input type="hidden" name="${k}.harness" value="agy">`}<input name="${k}.modelo" value="${h(f.modelo)}" placeholder="el del harness" list="modelos-${f.harness}" aria-label="Modelo de ${h(f.nombre)}" autocomplete="off" data-fase="${k}"${todos ? "" : ` aria-describedby="falta-${k}"`}>
+      ${todos ? "" : falta(k)}</td>
     <td><select name="${k}.esfuerzo" aria-label="Esfuerzo de ${h(f.nombre)}"${niveles(f.harness, f.modelo).length ? "" : " disabled"}>${
       opcionesEsfuerzo(niveles(f.harness, f.modelo), f.esfuerzo)}</select></td></tr>`;
   return `<nav class="crumbs"><a href="#/">← Todos los PFG</a></nav><h1>Ajustes</h1>
-    <p class="muted">Qué harness, qué modelo y con cuánto esfuerzo de razonamiento se ejecuta cada fase al pulsar «Ejecutar». Sin modelo o sin esfuerzo, se usa el que tenga configurado el harness.
+    <p class="muted">${todos ? "Qué harness, qué modelo" : "Qué modelo de Antigravity"} y con cuánto esfuerzo de razonamiento se ejecuta cada fase al pulsar «Ejecutar». Sin modelo o sin esfuerzo, se usa el que tenga configurado ${todos ? "el harness" : "Antigravity"}.
       El contenido de las memorias llega al proveedor del modelo: usa la herramienta de IA que autorice tu universidad.</p>
     ${c.error ? error(c.error) : ""}
     <div class="bloque" id="version" style="margin-bottom:16px">${vistaVersion(c.version)}</div>
-    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th><th>Harness</th><th>Modelo</th><th>Esfuerzo</th></tr></thead>
+    <form class="bloque ajustes" id="ajustes"><table><thead><tr><th>Fase</th>${todos ? "<th>Harness</th>" : ""}<th>Modelo</th><th>Esfuerzo</th></tr></thead>
       <tbody>${Object.entries(c.fases).map(fila).join("")}</tbody></table>
-      ${Object.entries(c.harnesses).map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
+      <label class="todos-harnesses"><input type="checkbox" name="todos_los_harnesses"${todos ? " checked" : ""}> Mostrar todos los harnesses (Claude Code, Codex, Pi, OpenCode)</label>
+      ${visibles().map(([hk, hv]) => `<datalist id="modelos-${hk}">${Object.keys(hv.modelos).map(m => `<option value="${h(m)}">`).join("")}</datalist>`).join("")}
       <button class="btn primary" type="submit">Guardar</button></form>
-    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>Harnesses en este ordenador (${h(c.sistema.nombre)})</h3>
+    <div class="bloque" style="margin-top:16px"><div class="harnesses-cab"><h3>${todos ? "Harnesses" : "Antigravity"} en este ordenador (${h(c.sistema.nombre)})</h3>
       <button class="btn" type="button" data-detectar>Comprobar de nuevo</button></div>
-      <ul class="harnesses">${Object.entries(c.harnesses).map(vistaHarness).join("")}</ul></div>`;
+      <ul class="harnesses">${visibles().map(vistaHarness).join("")}</ul></div>`;
+}
+
+// ---------- onboarding de Antigravity ----------
+// Mientras agy no esté listo, el dashboard enseña solo esto. «Configurar después» lo aparta hasta la próxima vez.
+let agyListo = false;
+const omitido = () => { try { return sessionStorage.onboarding === "omitido"; } catch { return false; } };
+function vistaOnboarding(o) {
+  const paso = (n, titulo, estado, cuerpo) => `<li class="paso-ob ${estado}"><div class="cab"><span class="num">${estado === "hecho" ? "✓" : n}</span><b>${titulo}</b></div>${estado === "actual" ? cuerpo : ""}</li>`;
+  const ti = o.instalar, ts = o.sesion, instalando = ti?.estado === "en_curso", iniciando = ts?.estado === "en_curso";
+  const manual = `<p>Para instalarlo a mano en ${h(o.sistema)}, ejecuta en ${o.sistema === "Windows" ? "PowerShell" : "un terminal"}:</p>${comando(o.comando)}
+    <p class="muted">Instrucciones oficiales: ${enlaceExterno(o.url, urlCorta(o.url))}. Después, pulsa «Comprobar de nuevo».</p>`;
+  const instalar = instalando
+    ? `<p>Instalando Antigravity…</p>${ti.log ? `<pre class="log-ob">${h(ti.log)}</pre>` : ""}`
+    : `${ti?.estado === "error" ? `${error("No se ha podido instalar: " + ti.error + ".")}${ti.log ? `<pre class="log-ob">${h(ti.log)}</pre>` : ""}${manual}` : ""}
+      <p><button class="btn primary" type="button" data-ob="instalar">${ti?.estado === "error" ? "Volver a intentarlo" : "Instalar Antigravity"}</button></p>
+      ${ti?.estado === "error" ? "" : `<p class="muted">Ejecuta el instalador oficial de Google (${enlaceExterno(o.url, urlCorta(o.url))}). No pide permisos de administrador.</p>`}`;
+  const sesion = iniciando
+    ? `<p>Se ha abierto el navegador: inicia sesión con tu cuenta de Google y vuelve aquí.</p>
+      ${ts.enlace ? `<p class="muted">Si no se ha abierto, ${enlaceExterno(ts.enlace, "abre este enlace")}.</p>` : ""}`
+    : `${ts?.estado === "error" ? error("No se ha podido iniciar sesión: " + ts.error + ".") : ""}
+      <p>Usa una cuenta personal de Google: las de Google Workspace, como muchas de universidad, no incluyen Antigravity.</p>
+      <p><button class="btn primary" type="button" data-ob="sesion">Iniciar sesión con Google</button></p>
+      ${ts?.estado === "error" ? `<p class="muted">También puedes abrir un terminal, escribir <code>agy</code>, iniciar sesión allí y pulsar «Comprobar de nuevo».</p>` : ""}`;
+  return `<h1>Prepara Antigravity</h1>
+    <p class="muted">Tribunal PFG usa Antigravity (agy), de Google, para leer las memorias y preparar las preguntas de la defensa.
+      El contenido de las memorias llega a Google: usa la herramienta de IA que autorice tu universidad.</p>
+    <ol class="bloque pasos-ob">
+      ${paso(1, "Instalar Antigravity", o.paso === "instalar" ? "actual" : "hecho", instalar)}
+      ${paso(2, "Iniciar sesión", o.paso === "sesion" ? "actual" : o.paso === "instalar" ? "pendiente" : "hecho", sesion)}
+    </ol>
+    <p class="acciones-ob"><button class="btn" type="button" data-ob="comprobar">Comprobar de nuevo</button>
+      <button class="btn" type="button" data-ob="despues">Configurar después</button></p>
+    <p class="muted">Sin Antigravity solo podrás leer y anotar las memorias.</p>`;
+}
+// true si ha pintado el onboarding y cargar() no debe seguir
+async function onboarding() {
+  if (agyListo || omitido()) return false;
+  let txt;
+  try { txt = await (await fetch("/api/onboarding")).text(); } catch { return false; }
+  const o = JSON.parse(txt);
+  if (o.paso === "listo") { agyListo = true; if (pintado.startsWith("onboarding")) { pintado = ""; aviso("Antigravity está listo."); } return false; }
+  rapido = o.instalar?.estado === "en_curso" || o.sesion?.estado === "en_curso";  // se sigue el avance cada segundo
+  if ("onboarding" + txt === pintado) return true;
+  pintado = "onboarding" + txt; hashPintado = "";
+  $("#main").innerHTML = vistaOnboarding(o);
+  document.body.dataset.vista = "onboarding";
+  return true;
 }
 
 async function cargar() {
+  if (await onboarding()) return;
   const ajustes = location.hash === "#ajustes", grados = location.hash.match(/^#grados(?:\/([a-z0-9-]+))?$/);
   const [, id, pestana = "ficha", cat] = location.hash.match(/^#\/([a-z0-9-]+)(?:\/(\w+))?(?:\/([a-z0-9-]+))?/) || [];
   let r, txt;
@@ -1098,6 +1163,18 @@ async function post(url, cuerpo) {
   } catch { aviso("No se puede conectar con el servidor del dashboard."); }
 }
 document.addEventListener("click", async e => {
+  const ob = e.target.closest("[data-ob]");
+  if (ob) {
+    if (ob.dataset.ob === "despues") {
+      try { sessionStorage.onboarding = "omitido"; } catch {}
+      aviso("Sin Antigravity solo puedes leer y anotar las memorias. Te lo volveremos a proponer al abrir Tribunal PFG.");
+    } else {
+      ob.disabled = true;
+      if (ob.dataset.ob === "comprobar") ob.textContent = "Comprobando…";
+      await post(`/api/onboarding/${ob.dataset.ob}`);
+    }
+    pintado = ""; return cargar();
+  }
   const detectar = e.target.closest("[data-detectar]");
   if (detectar) {
     detectar.disabled = true; detectar.textContent = "Comprobando…";
@@ -1109,9 +1186,9 @@ document.addEventListener("click", async e => {
       pintado = location.hash + txt;  // el latido no repinta lo mismo encima
       harnesses = JSON.parse(txt).harnesses;
       $("#version").innerHTML = vistaVersion(JSON.parse(txt).version);
-      $("#main .harnesses").innerHTML = Object.entries(harnesses).map(vistaHarness).join("");
-      document.querySelectorAll('#ajustes select[name$=".harness"]').forEach(s => {
-        [...s.options].forEach(o => o.textContent = harnesses[o.value].nombre + (harnesses[o.value].estado === "no_instalado" ? " (no instalado)" : ""));
+      $("#main .harnesses").innerHTML = visibles().map(vistaHarness).join("");
+      document.querySelectorAll('#ajustes [name$=".harness"]').forEach(s => {
+        [...s.options || []].forEach(o => o.textContent = harnesses[o.value].nombre + (harnesses[o.value].estado === "no_instalado" ? " (no instalado)" : ""));
         $(`#falta-${s.name.split(".")[0]}`).textContent = faltaHarness(s.value);
       });
       aviso("Harnesses y versión comprobados.");
@@ -1196,6 +1273,9 @@ document.addEventListener("change", e => {
   e.target.checked ? seleccion.add(id) : seleccion.delete(id);
   repintarSeleccion();
 });
+document.addEventListener("change", e => {  // el interruptor guarda al momento: así aparece o desaparece la columna Harness
+  if (e.target.name === "todos_los_harnesses") e.target.form.requestSubmit();
+});
 document.addEventListener("input", e => {  // los niveles de esfuerzo dependen del harness y del modelo
   const k = e.target.dataset.modelo || e.target.dataset.fase;
   if (!k) return;
@@ -1245,9 +1325,15 @@ document.addEventListener("submit", async e => {
   const cfg = {};
   for (const [campo, valor] of new FormData(e.target)) {
     const [fase, clave] = campo.split(".");
-    (cfg[fase] ??= {})[clave] = valor.trim();
+    if (clave) (cfg[fase] ??= {})[clave] = valor.trim();
   }
-  if (await post("/api/config", cfg)) { aviso("Ajustes guardados."); pintado = ""; cargar(); }
+  cfg.todos_los_harnesses = e.target.elements.todos_los_harnesses.checked;
+  // Al apagar el interruptor, el servidor pasa a agy las fases con otro harness.
+  const aAgy = !cfg.todos_los_harnesses && Object.values(cfg).some(f => f.harness && f.harness !== "agy");
+  if (await post("/api/config", cfg)) {
+    aviso(aAgy ? "Ajustes guardados. Las fases con otro harness usan ahora Antigravity." : "Ajustes guardados.");
+    pintado = ""; cargar();
+  }
 });
 let arrastres = 0;
 addEventListener("dragenter", e => {
