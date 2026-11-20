@@ -4,7 +4,7 @@
 # dependencies = ["playwright>=1.49", "pymupdf>=1.24"]
 # ///
 """E2E del dashboard en un navegador: el servidor de verdad, sobre una copia instalada como la de la app, con un agy
-falso en el PATH. Recorre los caminos de tests/features.md. Uso: uv run tests/test_e2e.py [--ver] [--capturas <carpeta>]"""
+falso en el PATH. Recorre los caminos de tests/features.md. Uso: uv run tests/test_e2e.py [--ver] [--capturas <carpeta>] [--dejar]"""
 import json
 import os
 import re
@@ -25,6 +25,7 @@ import instalar  # noqa: E402
 
 VER = "--ver" in sys.argv  # con ventana, para mirar el recorrido
 CAPTURAS = Path(sys.argv[sys.argv.index("--capturas") + 1]) if "--capturas" in sys.argv else None  # una PNG por paso
+DEJAR = "--dejar" in sys.argv  # al terminar, el dashboard de prueba sigue abierto para explorarlo a mano
 expect.set_options(timeout=60_000)  # la primera página del lector instala pymupdf con uv
 
 # Con dependencias del sistema solo en el CI de Linux: allí hace falta sudo y en local no.
@@ -191,8 +192,14 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:  # Windows:
 
         r = subprocess.run(["uv", "run", "scripts/pfg.py", "validar", pfg_id], cwd=raiz, capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
+        print("E2E OK", flush=True)
+        if DEJAR:  # sin pfgs/ de verdad: aquí no hay memorias de nadie
+            print(f"Dashboard de prueba en {base}, con el PFG {pfg_id} y su nota. Ctrl+C para cerrarlo.", flush=True)
+            try:
+                servidor.wait()
+            except KeyboardInterrupt:
+                pass
     finally:
         servidor.stdin.close()
         servidor.wait(timeout=30)
 
-print("E2E OK")
