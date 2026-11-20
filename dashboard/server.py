@@ -298,6 +298,13 @@ def cambiado(g):
     return t
 
 
+def mtime(p):
+    try:
+        return p.stat().st_mtime
+    except FileNotFoundError:  # el .tmp que escribir() acaba de renombrar, o un PFG que se está borrando
+        return 0
+
+
 def resumen(d):
     """Estado deducido de los archivos que existen; nadie escribe un campo de estado."""
     cola = COLA.copy()  # sin el cerrojo: lanzar llama a resumen con él cogido
@@ -325,7 +332,7 @@ def resumen(d):
             "comando": f"usa la skill {paso} con el PFG {d.name}" if paso else None,
             "ejecutor": HARNESSES[config_ejecucion()[paso]["harness"]]["nombre"] if paso else None,
             "ejecucion": ejecucion(d.name, paso), "cola": cola.index(d.name) + 1 if d.name in cola else None,
-            "modificado": max(p.stat().st_mtime for p in d.rglob("*"))}
+            "modificado": max(map(mtime, d.rglob("*")), default=0)}
 
 
 def niveles(harness, modelo):

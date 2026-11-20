@@ -25,7 +25,7 @@ uv run tests/test_e2e.py --capturas <carpeta>
 
 Termina con «E2E OK». Si falla, la traza dice qué paso y qué esperaba; la última captura que llegó a guardarse es el último paso que fue bien.
 
-Abre cada PNG (`1-lista-vacia.png` … `7-tras-recargar.png`) con tu herramienta de leer imágenes y míralas como un docente:
+Abre cada PNG en orden (`01-lista-vacia.png`, `02-lista-lista.png`…: el número es el orden del recorrido) con tu herramienta de leer imágenes y míralas como un docente:
 
 - ¿Se ve lo que el paso dice en `tests/features.md`?
 - ¿Hay textos cortados o montados, zonas vacías donde debería haber contenido, mensajes de error o algo que no cuadra con tu cambio?
